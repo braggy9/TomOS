@@ -85,9 +85,13 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
       Source: {
         rich_text: [{ text: { content: source } }],
       },
-      "Due Date": parsedTask.dueDate
-        ? { date: { start: parsedTask.dueDate } }
-        : undefined,
+      ...(parsedTask.dueDate
+        ? {
+            "Due Date": {
+              date: { start: parsedTask.dueDate },
+            },
+          }
+        : {}),
       Captured: {
         date: { start: now },
       },
