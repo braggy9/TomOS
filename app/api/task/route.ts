@@ -9,7 +9,7 @@ const RequestBody = z.object({
   source: z.string().optional().default("Alfred"),
 });
 
-const NOTION_DATABASE_ID = "51ebe8dd-19a0-4f4e-9768-361c8872acdc";
+const NOTION_DATABASE_ID = "739144099ebc4ba1ba619dd1a5a08d25";
 const NTFY_TOPIC = "tomos-tasks-sufgocdozVo4nawcud";
 
 interface ParsedTask {
