@@ -59,6 +59,9 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
     auth: process.env.NOTION_API_KEY,
   });
 
+  console.log('Creating Notion page with database ID:', NOTION_DATABASE_ID);
+  console.log('Parsed task:', JSON.stringify(parsedTask, null, 2));
+
   const now = new Date().toISOString();
 
   const response = await notion.pages.create({
@@ -188,10 +191,12 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("Error processing task:", error);
+    console.error("Error details:", JSON.stringify(error, null, 2));
     return NextResponse.json(
       {
         error: "Failed to process task",
         details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 }
     );
