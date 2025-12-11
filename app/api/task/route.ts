@@ -23,8 +23,7 @@ interface ParsedTask {
 
 async function parseTaskWithClaude(taskDescription: string): Promise<ParsedTask> {
   const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY || "proxy",
-    baseURL: process.env.ANTHROPIC_PROXY_URL || "https://tomos-proxy.vercel.app/api/anthropic-proxy",
+    apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
   const prompt = `Parse the following task description and extract structured information. Return a JSON object with these fields:
