@@ -62,6 +62,15 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
   console.log('Creating Notion page with database ID:', NOTION_DATABASE_ID);
   console.log('Parsed task:', JSON.stringify(parsedTask, null, 2));
 
+  // Test database access first
+  try {
+    const dbInfo = await notion.databases.retrieve({ database_id: NOTION_DATABASE_ID });
+    console.log('Database retrieved successfully:', dbInfo.id);
+  } catch (dbError) {
+    console.error('Failed to retrieve database:', dbError);
+    throw new Error(`Database access failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
+  }
+
   const now = new Date().toISOString();
 
   const response = await notion.pages.create({
