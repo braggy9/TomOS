@@ -118,7 +118,7 @@ async function sendNtfyNotification(parsedTask: ParsedTask, notionPageId: string
   await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
     method: "POST",
     headers: {
-      "Title": "🔴 Task Captured",
+      "Title": "Task Captured",
       "Click": notionUrl,
       "Tags": "white_check_mark"
     },
@@ -151,7 +151,7 @@ function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: "POST",
       headers: {
-        "Title": "⏰ Task Due Soon",
+        "Title": "Task Due Soon",
         "Click": notionUrl,
         "Tags": "alarm_clock",
         "Priority": "4"
