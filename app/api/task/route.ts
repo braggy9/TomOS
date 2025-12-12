@@ -85,7 +85,7 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
         select: { name: parsedTask.priority },
       },
       Context: {
-        select: { name: parsedTask.context },
+        multi_select: [{ name: parsedTask.context }],
       },
       Energy: {
         select: { name: parsedTask.energy },
@@ -94,7 +94,7 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
         select: { name: parsedTask.time },
       },
       Source: {
-        rich_text: [{ text: { content: source } }],
+        select: { name: source },
       },
       ...(parsedTask.dueDate
         ? {
