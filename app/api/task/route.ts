@@ -117,14 +117,12 @@ async function sendNtfyNotification(parsedTask: ParsedTask, notionPageId: string
 
   await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      topic: NTFY_TOPIC,
-      title: "New Task Created",
-      message: `${parsedTask.title}\nPriority: ${parsedTask.priority}\nContext: ${parsedTask.context}`,
-      tags: ["clipboard"],
-      actions: [{ action: "view", label: "Open in Notion", url: notionUrl }],
-    }),
+    headers: {
+      "Title": "🔴 Task Captured",
+      "Click": notionUrl,
+      "Tags": "white_check_mark"
+    },
+    body: parsedTask.title
   });
 }
 
@@ -152,15 +150,13 @@ function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
     const notionUrl = `https://notion.so/${notionPageId.replace(/-/g, "")}`;
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        topic: NTFY_TOPIC,
-        title: "⏰ Task Due Soon",
-        message: `${parsedTask.title}\nDue in 15 minutes!`,
-        priority: 4,
-        tags: ["alarm_clock"],
-        actions: [{ action: "view", label: "Open in Notion", url: notionUrl }],
-      }),
+      headers: {
+        "Title": "⏰ Task Due Soon",
+        "Click": notionUrl,
+        "Tags": "alarm_clock",
+        "Priority": "4"
+      },
+      body: `${parsedTask.title}\nDue in 15 minutes!`
     });
   });
 }
