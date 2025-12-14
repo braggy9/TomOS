@@ -26,8 +26,8 @@ async function getTasksForDigest(): Promise<NotionTask[]> {
   // Query tasks that are:
   // 1. Not Done
   // 2. Either have no due date OR due date is today or overdue
-  const response = await notion.dataSources.query({
-    data_source_id: NOTION_DATABASE_ID,
+  const response = await (notion.databases as any).query({
+    database_id: NOTION_DATABASE_ID,
     filter: {
       and: [
         {

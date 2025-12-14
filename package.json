@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "@notionhq/client": "^5.4.0",
+    "@notionhq/client": "^2.2.15",
     "docx": "^8.5.0",
     "ics": "^3.7.6",
     "lucide-react": "^0.460.0",
