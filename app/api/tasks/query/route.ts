@@ -260,7 +260,7 @@ async function queryNotionDatabase(filters: QueryFilters): Promise<any[]> {
   const filter = buildNotionFilter(filters);
 
   const queryParams: any = {
-    database_id: NOTION_DATABASE_ID,
+    data_source_id: NOTION_DATABASE_ID,
     sorts: [
       {
         property: "Priority",
