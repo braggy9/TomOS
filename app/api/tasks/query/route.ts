@@ -255,13 +255,12 @@ function buildNotionFilter(filters: QueryFilters): any {
 async function queryNotionDatabase(filters: QueryFilters): Promise<any[]> {
   const notion = new Client({
     auth: process.env.NOTION_API_KEY,
-  });
+  }) as any;
 
   const filter = buildNotionFilter(filters);
 
-  const response = await (notion.databases as any).query({
+  const queryParams: any = {
     database_id: NOTION_DATABASE_ID,
-    filter,
     sorts: [
       {
         property: "Priority",
@@ -272,7 +271,13 @@ async function queryNotionDatabase(filters: QueryFilters): Promise<any[]> {
         direction: "ascending",
       },
     ],
-  });
+  };
+
+  if (filter) {
+    queryParams.filter = filter;
+  }
+
+  const response = await notion.databases.query(queryParams);
 
   return response.results.map((page: any) => {
     const props = page.properties;
