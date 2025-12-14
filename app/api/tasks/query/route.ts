@@ -277,7 +277,7 @@ async function queryNotionDatabase(filters: QueryFilters): Promise<any[]> {
     queryParams.filter = filter;
   }
 
-  const response = await (notion.databases as any).query(queryParams);
+  const response = await notion.dataSources.query(queryParams);
 
   return response.results.map((page: any) => {
     const props = page.properties;
