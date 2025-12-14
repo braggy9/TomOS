@@ -255,7 +255,7 @@ function buildNotionFilter(filters: QueryFilters): any {
 async function queryNotionDatabase(filters: QueryFilters): Promise<any[]> {
   const notion = new Client({
     auth: process.env.NOTION_API_KEY,
-  }) as any;
+  });
 
   const filter = buildNotionFilter(filters);
 
@@ -277,7 +277,7 @@ async function queryNotionDatabase(filters: QueryFilters): Promise<any[]> {
     queryParams.filter = filter;
   }
 
-  const response = await notion.databases.query(queryParams);
+  const response = await (notion.databases as any).query(queryParams);
 
   return response.results.map((page: any) => {
     const props = page.properties;
