@@ -19,6 +19,9 @@ interface ParsedTask {
   energy: "Low" | "Medium" | "High";
   time: "Quick" | "Short" | "Long";
   dueDate: string | null;
+  subtasks: string[];
+  tags: string[];
+  mentions: string[];
 }
 
 async function parseTaskWithClaude(taskDescription: string): Promise<ParsedTask> {
@@ -27,12 +30,19 @@ async function parseTaskWithClaude(taskDescription: string): Promise<ParsedTask>
   });
 
   const prompt = `Parse the following task description and extract structured information. Return a JSON object with these fields:
-- title: A clear, concise task title (string)
+- title: A clear, concise task title (string) - remove any subtask bullets, tags, or mentions from the main title
 - priority: One of "Urgent", "Important", or "Someday" (string)
 - context: One of "Work", "Client Projects", "Strategy", "Admin", or "Legal Review" (string)
 - energy: One of "Low", "Medium", or "High" based on mental/physical effort required (string)
 - time: One of "Quick" (< 15 min), "Short" (15-60 min), or "Long" (> 60 min) (string)
 - dueDate: ISO 8601 date string in Sydney timezone (Australia/Sydney) if a due date is mentioned, or null if not mentioned
+- subtasks: Array of subtask strings extracted from bullet points (-, *, •) or numbered lists (1., 2., etc.). Empty array if none. (array of strings)
+- tags: Array of hashtags found in the task description (e.g., #urgent, #review). Extract without the # symbol. Empty array if none. (array of strings)
+- mentions: Array of @mentions found (e.g., @john, @sarah). Extract without the @ symbol. Empty array if none. (array of strings)
+
+Examples:
+- "Review contract #urgent @legal - Check clauses - Verify signatures" → subtasks: ["Check clauses", "Verify signatures"], tags: ["urgent"], mentions: ["legal"]
+- "Call dentist tomorrow" → subtasks: [], tags: [], mentions: []
 
 Task description: ${taskDescription}
 
@@ -72,6 +82,73 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
 
   const now = new Date().toISOString();
 
+  // Build page content (children blocks) for subtasks, tags, and mentions
+  const children: any[] = [];
+
+  // Add tags if present
+  if (parsedTask.tags.length > 0) {
+    children.push({
+      object: "block",
+      type: "paragraph",
+      paragraph: {
+        rich_text: [
+          {
+            type: "text",
+            text: { content: "Tags: " },
+            annotations: { bold: true },
+          },
+          {
+            type: "text",
+            text: { content: parsedTask.tags.map(tag => `#${tag}`).join(", ") },
+          },
+        ],
+      },
+    });
+  }
+
+  // Add mentions if present
+  if (parsedTask.mentions.length > 0) {
+    children.push({
+      object: "block",
+      type: "paragraph",
+      paragraph: {
+        rich_text: [
+          {
+            type: "text",
+            text: { content: "Mentions: " },
+            annotations: { bold: true },
+          },
+          {
+            type: "text",
+            text: { content: parsedTask.mentions.map(mention => `@${mention}`).join(", ") },
+          },
+        ],
+      },
+    });
+  }
+
+  // Add subtasks as to-do blocks
+  if (parsedTask.subtasks.length > 0) {
+    children.push({
+      object: "block",
+      type: "heading_3",
+      heading_3: {
+        rich_text: [{ type: "text", text: { content: "Subtasks" } }],
+      },
+    });
+
+    parsedTask.subtasks.forEach((subtask) => {
+      children.push({
+        object: "block",
+        type: "to_do",
+        to_do: {
+          rich_text: [{ type: "text", text: { content: subtask } }],
+          checked: false,
+        },
+      });
+    });
+  }
+
   const response = await notion.pages.create({
     parent: { database_id: NOTION_DATABASE_ID },
     properties: {
@@ -107,6 +184,7 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
         date: { start: now },
       },
     },
+    ...(children.length > 0 ? { children } : {}),
   });
 
   return response.id;
