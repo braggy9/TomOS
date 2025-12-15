@@ -49,7 +49,7 @@ Task description: ${taskDescription}
 Return ONLY valid JSON, no markdown or explanation.`;
 
   const message = await anthropic.messages.create({
-    model: "claude-3-haiku-20240307",
+    model: "claude-sonnet-4-5-20250929",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });

@@ -104,7 +104,7 @@ Format the email with:
 Keep it concise, actionable, and encouraging. Use emojis appropriately but not excessively.`;
 
   const message = await anthropic.messages.create({
-    model: "claude-3-haiku-20240307",
+    model: "claude-sonnet-4-5-20250929",
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });
