@@ -29,13 +29,18 @@ async function parseTaskWithClaude(taskDescription: string): Promise<ParsedTask>
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
-  const prompt = `Parse the following task description and extract structured information. Return a JSON object with these fields:
+  // Get current date/time in Sydney timezone for relative date parsing
+  const now = new Date();
+  const sydneyTime = new Date(now.toLocaleString("en-US", { timeZone: "Australia/Sydney" }));
+  const currentDateTime = sydneyTime.toISOString();
+
+  const prompt = `You are parsing a task on ${currentDateTime} (Sydney timezone). Parse the following task description and extract structured information. Return a JSON object with these fields:
 - title: A clear, concise task title (string) - remove any subtask bullets, tags, or mentions from the main title
 - priority: One of "Urgent", "Important", or "Someday" (string)
 - context: One of "Work", "Client Projects", "Strategy", "Admin", or "Legal Review" (string)
 - energy: One of "Low", "Medium", or "High" based on mental/physical effort required (string)
 - time: One of "Quick" (< 15 min), "Short" (15-60 min), or "Long" (> 60 min) (string)
-- dueDate: ISO 8601 date string in Sydney timezone (Australia/Sydney) if a due date is mentioned, or null if not mentioned
+- dueDate: ISO 8601 date string in Sydney timezone (Australia/Sydney) if a due date is mentioned. Handle relative dates like "tomorrow", "next week", "Friday", etc. based on the current date/time provided above. Return null if no due date/time is mentioned
 - subtasks: Array of subtask strings extracted from bullet points (-, *, •) or numbered lists (1., 2., etc.). Empty array if none. (array of strings)
 - tags: Array of hashtags found in the task description (e.g., #urgent, #review). Extract without the # symbol. Empty array if none. (array of strings)
 - mentions: Array of @mentions found (e.g., @john, @sarah). Extract without the @ symbol. Empty array if none. (array of strings)
