@@ -114,6 +114,7 @@ Keep it concise, actionable, and encouraging. Use emojis appropriately but not e
     throw new Error("Unexpected response type from Claude");
   }
 
+  // Daily digest returns plain text, not JSON, so no stripping needed
   return content.text;
 }
 

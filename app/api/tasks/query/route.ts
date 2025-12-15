@@ -58,7 +58,13 @@ Return ONLY valid JSON, no markdown or explanation.`;
     throw new Error("Unexpected response type from Claude");
   }
 
-  const parsed = JSON.parse(content.text) as QueryFilters;
+  // Strip markdown code blocks if present (```json ... ```)
+  let jsonText = content.text.trim();
+  if (jsonText.startsWith("```")) {
+    jsonText = jsonText.replace(/^```(?:json)?\s*\n/, "").replace(/\n```\s*$/, "");
+  }
+
+  const parsed = JSON.parse(jsonText) as QueryFilters;
   return parsed;
 }
 
