@@ -275,11 +275,11 @@ export async function POST(req: NextRequest) {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
-        Title: `✅ ${createdTasks.length} Tasks Captured`,
+        Title: `${createdTasks.length} Tasks Captured`,
         Click: notionUrl,
         Tags: 'white_check_mark,sparkles',
       },
-      body: createdTasks.map((t) => `• ${t.title}`).join('\n'),
+      body: createdTasks.map((t) => `${t.title}`).join('\n'),
     });
 
     console.log(`Batch import: Created ${createdTasks.length} tasks`);
