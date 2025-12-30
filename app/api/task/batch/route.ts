@@ -228,6 +228,7 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('[BATCH] Version: 2025-12-31-v2 - Starting batch import');
     const json = await req.json();
     const parsed = RequestBody.safeParse(json);
 
@@ -248,7 +249,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Parse the batch input
+    console.log('[BATCH] Parsing batch tasks...');
     const parsedTasks = await parseBatchTasks(tasks);
+    console.log(`[BATCH] Parsed ${parsedTasks.length} tasks`);
 
     if (parsedTasks.length === 0) {
       return NextResponse.json(
@@ -258,9 +261,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Create all tasks in Notion
+    console.log('[BATCH] Creating tasks in Notion...');
     const createdTasks = await Promise.all(
-      parsedTasks.map(async (task) => {
+      parsedTasks.map(async (task, index) => {
+        console.log(`[BATCH] Creating task ${index + 1}/${parsedTasks.length}: ${task.title}`);
         const pageId = await createNotionPage(task, source);
+        console.log(`[BATCH] Created task ${index + 1} with ID: ${pageId}`);
         return {
           pageId,
           title: task.title,
@@ -271,6 +277,7 @@ export async function POST(req: NextRequest) {
     );
 
     // Send batch notification
+    console.log('[BATCH] Sending notification...');
     const notionUrl = `https://notion.so/${NOTION_DATABASE_ID.replace(/-/g, '')}`;
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
