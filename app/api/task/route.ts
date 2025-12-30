@@ -215,6 +215,46 @@ async function sendNtfyNotification(parsedTask: ParsedTask, notionPageId: string
   });
 }
 
+async function syncTaskToCalendar(notionPageId: string, parsedTask: ParsedTask): Promise<void> {
+  // Only sync if task has a due date and calendar is configured
+  if (!parsedTask.dueDate) {
+    console.log('Skipping calendar sync: no due date');
+    return;
+  }
+
+  const refreshToken = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
+  if (!refreshToken) {
+    console.log('Skipping calendar sync: Google Calendar not configured');
+    return;
+  }
+
+  try {
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://tomos-task-api.vercel.app';
+
+    const response = await fetch(`${baseUrl}/api/calendar/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'syncOne',
+        taskId: notionPageId,
+        refreshToken,
+      }),
+    });
+
+    if (response.ok) {
+      console.log('Task synced to Google Calendar:', notionPageId);
+    } else {
+      const error = await response.json();
+      console.error('Failed to sync task to calendar:', error);
+    }
+  } catch (error) {
+    console.error('Error syncing task to calendar:', error);
+    // Don't throw - calendar sync failure shouldn't block task creation
+  }
+}
+
 function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
   if (!parsedTask.dueDate) return;
 
@@ -275,6 +315,11 @@ export async function POST(req: Request) {
     const notionPageId = await createNotionPage(parsedTask, source);
     await sendNtfyNotification(parsedTask, notionPageId);
     scheduleReminder(parsedTask, notionPageId);
+
+    // Auto-sync to calendar (don't await - run in background)
+    syncTaskToCalendar(notionPageId, parsedTask).catch(err =>
+      console.error('Background calendar sync error:', err)
+    );
 
     return NextResponse.json({
       success: true,
