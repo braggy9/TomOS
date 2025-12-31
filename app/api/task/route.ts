@@ -290,6 +290,46 @@ function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
   });
 }
 
+/**
+ * Sends APNs push notification to all registered iOS/macOS devices.
+ * This notifies users when a new task is created.
+ *
+ * @param parsedTask - The parsed task details
+ * @param notionPageId - The Notion page ID for deep linking
+ */
+async function sendAPNsPushNotification(parsedTask: ParsedTask, notionPageId: string): Promise<void> {
+  try {
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://tomos-task-api.vercel.app';
+
+    console.log('📱 Sending APNs push notification for new task...');
+
+    const response = await fetch(`${baseUrl}/api/send-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '📋 New Task Created',
+        body: parsedTask.title,
+        task_id: notionPageId,
+        priority: parsedTask.priority.toLowerCase(),
+        badge: 1,
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`✅ APNs push sent to ${result.sent_to} device(s)`);
+    } else {
+      const error = await response.json();
+      console.error('⚠️ APNs push failed:', error);
+    }
+  } catch (error) {
+    console.error('❌ Error sending APNs push:', error);
+    // Don't throw - push notification failure shouldn't block task creation
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const json = await req.json();
@@ -319,6 +359,11 @@ export async function POST(req: Request) {
     // Auto-sync to calendar (don't await - run in background)
     syncTaskToCalendar(notionPageId, parsedTask).catch(err =>
       console.error('Background calendar sync error:', err)
+    );
+
+    // Send APNs push notification to iOS/macOS devices (don't await - run in background)
+    sendAPNsPushNotification(parsedTask, notionPageId).catch(err =>
+      console.error('Background APNs push error:', err)
     );
 
     return NextResponse.json({

@@ -5,8 +5,22 @@
   "regions": ["syd1"],
   "crons": [
     {
-      "path": "/api/cron/daily-digest",
-      "schedule": "0 21 * * *"
+      "path": "/api/notifications/morning-overview",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/notifications/eod-summary",
+      "schedule": "0 8 * * *"
     }
-  ]
+  ],
+  "env": {
+    "NOTION_API_KEY": "@notion-api-key",
+    "ANTHROPIC_API_KEY": "@anthropic-api-key",
+    "APNS_KEY_ID": "@apns-key-id",
+    "APNS_TEAM_ID": "@apns-team-id",
+    "APNS_TOPIC": "@apns-topic",
+    "APNS_ENVIRONMENT": "@apns-environment",
+    "APNS_AUTH_KEY": "@apns-auth-key",
+    "NOTION_DEVICE_TOKENS_DB_ID": "@notion-device-tokens-db-id"
+  }
 }
