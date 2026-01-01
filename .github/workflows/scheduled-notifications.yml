@@ -1,0 +1,41 @@
+name: Scheduled Notifications
+
+on:
+  schedule:
+    # Morning Overview - 8am Sydney (22:00 UTC previous day)
+    - cron: '0 22 * * *'
+    # EOD Summary - 6pm Sydney (08:00 UTC)
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Allow manual triggering for testing
+
+jobs:
+  trigger-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine which notification to send
+        id: determine
+        run: |
+          HOUR=$(date -u +%H)
+          if [ "$HOUR" = "22" ]; then
+            echo "endpoint=morning-overview" >> $GITHUB_OUTPUT
+            echo "name=Morning Overview" >> $GITHUB_OUTPUT
+          else
+            echo "endpoint=eod-summary" >> $GITHUB_OUTPUT
+            echo "name=EOD Summary" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger ${{ steps.determine.outputs.name }}
+        run: |
+          response=$(curl -s -w "\n%{http_code}" "https://tomos-task-api.vercel.app/api/notifications/${{ steps.determine.outputs.endpoint }}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Response: $body"
+          echo "HTTP Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ ${{ steps.determine.outputs.name }} triggered successfully"
+          else
+            echo "❌ Failed to trigger ${{ steps.determine.outputs.name }}"
+            exit 1
+          fi
