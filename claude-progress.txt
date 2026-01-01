@@ -1,39 +1,108 @@
-# TomOS Claude Code Progress Log
+# TomOS API Progress Tracker
 
-This file tracks Claude Code session activity and major milestones.
-
-## Project Timeline
-
-### 2025-12-19
-- Initial APNs backend implementation
-- Created /api/register-device and /api/send-push endpoints
-- JWT-based APNs authentication
-
-### 2025-12-31
-- Added health check endpoint
-- Debug logging for batch endpoint
-- Fixed emoji encoding in batch notifications
-
-### 2026-01-01
-- Deployed all API endpoints to production
-- Migrated scheduled notifications from Vercel crons to GitHub Actions
-- Fixed CRON_SECRET authentication issues
-- Migrated notifications from ntfy to APNs
-- Removed all ntfy references
-- Updated CLAUDE_CODE_HANDOVER.md with current architecture
-- Set up Claude Code memory structure
+Track work sessions and deployment history here. Commit this file to Git!
 
 ## Current Status
-- Backend fully deployed at https://tomos-task-api.vercel.app
-- APNs endpoints working (no devices registered yet)
-- GitHub Actions handling scheduled notifications
-- Awaiting first device registration from iOS/macOS app
 
-## Pending
-- Run iOS/macOS app to register first device
-- Add NOTION_DEVICE_TOKENS_DB_ID to Vercel after registration
-- End-to-end push notification test
+**Latest Deploy:** 2026-01-01  
+**Deployment URL:** `https://tomos-task-api.vercel.app`  
+**Status:** ✅ APNs migration complete
 
 ---
-## Session Logs
 
+## Recent Deployments
+
+### 2026-01-01: APNs Migration
+**Commits:** db898ba, d65bb4d, 1123696  
+**Features:**
+- ✅ Migrated from ntfy → native APNs
+- ✅ Created `/api/register-device` endpoint
+- ✅ Created `/api/send-push` endpoint
+- ✅ Updated `/api/task` to trigger push notifications
+- ✅ HTTP/2 + JWT implementation
+- ✅ GitHub Actions for scheduled notifications
+- ✅ Fixed CRON_SECRET authentication
+- ✅ Added Claude Code handover documentation
+
+**Environment Variables Added:**
+- APNS_KEY_ID
+- APNS_TEAM_ID
+- APNS_TOPIC
+- APNS_ENVIRONMENT
+- APNS_AUTH_KEY
+
+**Pending:**
+- [ ] Add NOTION_DEVICE_TOKENS_DB_ID (waiting for first device registration)
+- [ ] End-to-end testing with physical iOS device
+
+---
+
+## Completed Features
+
+### Push Notifications
+- ✅ APNs HTTP/2 native implementation
+- ✅ JWT token caching (50min)
+- ✅ Device token management via Notion
+- ✅ Rich notification payloads
+- ✅ Automatic push on task creation
+
+### Task Management
+- ✅ Natural language parsing
+- ✅ Notion integration
+- ✅ Priority detection
+- ✅ Due date parsing
+- ✅ Context assignment
+
+### Integrations
+- ✅ Google Calendar sync
+- ✅ Email-to-task processing
+- ✅ Morning/EOD summaries
+- ✅ AI task suggestions
+
+### Infrastructure
+- ✅ Vercel deployment
+- ✅ GitHub Actions cron jobs
+- ✅ Environment variable management
+- ✅ Sydney (syd1) region deployment
+
+---
+
+## Session Notes
+
+### 2026-01-01: Repository Cleanup
+- Created CLAUDE.md documentation
+- Added RELATED_REPOS.md
+- Clarified separation from TomOS-Apps repo
+- Documented APNs architecture
+
+### 2025-12-31: APNs Deployment
+- Completed APNs endpoint implementation
+- Fixed Vercel environment variables
+- Set up GitHub Actions workflows
+- Verified deployment successful
+
+### Next Session
+- Test APNs with physical device
+- Add NOTION_DEVICE_TOKENS_DB_ID
+- Monitor GitHub Actions cron jobs
+- Consider rate limiting for API endpoints
+
+---
+
+## Known Issues
+
+- [ ] NOTION_DEVICE_TOKENS_DB_ID needs to be added after first registration
+- [ ] GitHub Actions cron timing may need adjustment
+- [ ] Rate limiting not yet implemented on public endpoints
+
+---
+
+## Future Enhancements
+
+- [ ] WebSocket support for real-time updates
+- [ ] Task templates
+- [ ] Recurring task support
+- [ ] Task dependencies
+- [ ] Time tracking integration
+- [ ] Analytics dashboard
+- [ ] Multi-user support
