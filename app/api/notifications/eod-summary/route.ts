@@ -3,7 +3,6 @@ import { Client } from '@notionhq/client';
 import Anthropic from '@anthropic-ai/sdk';
 
 const NOTION_DATABASE_ID = '739144099ebc4ba1ba619dd1a5a08d25';
-const NTFY_TOPIC = 'tomos-tasks-sufgocdozVo4nawcud';
 
 /**
  * End-of-Day Summary Notification
@@ -188,19 +187,26 @@ ${summary}`,
 
     notificationBody += `\n\n🤖 ${aiReflection}\n\n👉 View Dashboard`;
 
-    // Send Ntfy notification
-    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+    // Send APNs push notification to iOS/macOS devices
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://tomos-task-api.vercel.app';
+
+    const pushResponse = await fetch(`${baseUrl}/api/send-push`, {
       method: 'POST',
-      headers: {
-        Title: 'End of Day Summary',
-        Click: dashboardUrl,
-        Tags: 'moon,checkmark',
-        Priority: '3',
-      },
-      body: notificationBody,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'End of Day Summary',
+        body: notificationBody,
+        priority: 'normal',
+        badge: remainingCount,
+      }),
     });
 
-    console.log('EOD summary sent:', {
+    const pushResult = await pushResponse.json();
+    console.log('EOD summary sent via APNs:', pushResult);
+
+    console.log('EOD summary stats:', {
       completed: completedCount,
       remaining: remainingCount,
       tomorrow: tomorrowCount,

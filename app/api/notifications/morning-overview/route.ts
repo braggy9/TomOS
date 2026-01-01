@@ -3,7 +3,6 @@ import { Client } from '@notionhq/client';
 import Anthropic from '@anthropic-ai/sdk';
 
 const NOTION_DATABASE_ID = '739144099ebc4ba1ba619dd1a5a08d25';
-const NTFY_TOPIC = 'tomos-tasks-sufgocdozVo4nawcud';
 
 /**
  * Morning Overview Notification
@@ -142,19 +141,24 @@ ${aiSuggestion}
 
 👉 View Dashboard`;
 
-    // Send Ntfy notification
-    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+    // Send APNs push notification to iOS/macOS devices
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://tomos-task-api.vercel.app';
+
+    const pushResponse = await fetch(`${baseUrl}/api/send-push`, {
       method: 'POST',
-      headers: {
-        Title: 'Morning Overview',
-        Click: dashboardUrl,
-        Tags: 'sunrise,calendar',
-        Priority: '4',
-      },
-      body: notificationBody,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Morning Overview',
+        body: notificationBody,
+        priority: urgent.length > 0 ? 'urgent' : 'normal',
+        badge: tasks.length,
+      }),
     });
 
-    console.log('Morning overview sent:', { taskCount: tasks.length });
+    const pushResult = await pushResponse.json();
+    console.log('Morning overview sent via APNs:', pushResult);
 
     return NextResponse.json({
       success: true,
