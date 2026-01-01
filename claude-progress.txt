@@ -1,0 +1,39 @@
+# TomOS Claude Code Progress Log
+
+This file tracks Claude Code session activity and major milestones.
+
+## Project Timeline
+
+### 2025-12-19
+- Initial APNs backend implementation
+- Created /api/register-device and /api/send-push endpoints
+- JWT-based APNs authentication
+
+### 2025-12-31
+- Added health check endpoint
+- Debug logging for batch endpoint
+- Fixed emoji encoding in batch notifications
+
+### 2026-01-01
+- Deployed all API endpoints to production
+- Migrated scheduled notifications from Vercel crons to GitHub Actions
+- Fixed CRON_SECRET authentication issues
+- Migrated notifications from ntfy to APNs
+- Removed all ntfy references
+- Updated CLAUDE_CODE_HANDOVER.md with current architecture
+- Set up Claude Code memory structure
+
+## Current Status
+- Backend fully deployed at https://tomos-task-api.vercel.app
+- APNs endpoints working (no devices registered yet)
+- GitHub Actions handling scheduled notifications
+- Awaiting first device registration from iOS/macOS app
+
+## Pending
+- Run iOS/macOS app to register first device
+- Add NOTION_DEVICE_TOKENS_DB_ID to Vercel after registration
+- End-to-end push notification test
+
+---
+## Session Logs
+

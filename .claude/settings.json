@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "sessionEnd": ".claude/hooks/log-session-end.sh",
+    "preCompact": ".claude/hooks/log-precompact.sh"
+  },
+  "context": {
+    "alwaysRead": [
+      "CLAUDE_CODE_HANDOVER.md",
+      "CLAUDE.md"
+    ]
+  },
+  "rules": {
+    "directory": ".claude/rules"
+  }
+}
