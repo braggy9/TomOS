@@ -26,7 +26,9 @@ jobs:
 
       - name: Trigger ${{ steps.determine.outputs.name }}
         run: |
-          response=$(curl -s -w "\n%{http_code}" "https://tomos-task-api.vercel.app/api/notifications/${{ steps.determine.outputs.endpoint }}")
+          response=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://tomos-task-api.vercel.app/api/notifications/${{ steps.determine.outputs.endpoint }}")
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
 
