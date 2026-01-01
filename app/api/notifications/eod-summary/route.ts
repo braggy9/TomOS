@@ -192,7 +192,7 @@ ${summary}`,
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
-        Title: '🌙 End of Day Summary',
+        Title: 'End of Day Summary',
         Click: dashboardUrl,
         Tags: 'moon,checkmark',
         Priority: '3',

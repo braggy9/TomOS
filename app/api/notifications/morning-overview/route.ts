@@ -146,7 +146,7 @@ ${aiSuggestion}
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
-        Title: '☀️ Morning Overview',
+        Title: 'Morning Overview',
         Click: dashboardUrl,
         Tags: 'sunrise,calendar',
         Priority: '4',
