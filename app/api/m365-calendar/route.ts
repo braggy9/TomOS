@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Client } from '@notionhq/client';
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY });
-const NOTION_PARENT_PAGE_ID = process.env.NOTION_PARENT_PAGE_ID;
+// Use existing parent page or device tokens DB parent
+const NOTION_PARENT_PAGE_ID = process.env.NOTION_PARENT_PAGE_ID || '26f46505452d8001a172c824053753e9';
 
 interface M365Event {
   id: string;
