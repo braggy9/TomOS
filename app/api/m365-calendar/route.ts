@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Client } from '@notionhq/client';
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY });
-
-// Store M365 events in a dedicated Notion page as JSON
-const M365_CALENDAR_PAGE_ID = process.env.M365_CALENDAR_PAGE_ID;
+const NOTION_PARENT_PAGE_ID = process.env.NOTION_PARENT_PAGE_ID;
 
 interface M365Event {
   id: string;
@@ -22,31 +20,51 @@ interface M365CalendarPayload {
   source: string;
 }
 
+// Helper to find or create the M365 Calendar storage page
+async function getOrCreateStoragePage(): Promise<string> {
+  // Search for existing page
+  const searchResponse = await notion.search({
+    query: 'TomOS M365 Calendar Data',
+    filter: { property: 'object', value: 'page' },
+  });
+
+  const existingPage = searchResponse.results.find(
+    (page: any) => page.properties?.title?.title?.[0]?.plain_text === 'TomOS M365 Calendar Data'
+  );
+
+  if (existingPage) {
+    return existingPage.id;
+  }
+
+  // Create new page
+  const newPage = await notion.pages.create({
+    parent: { page_id: NOTION_PARENT_PAGE_ID! },
+    properties: {
+      title: {
+        title: [{ text: { content: 'TomOS M365 Calendar Data' } }],
+      },
+    },
+  });
+
+  return newPage.id;
+}
+
 // POST - Receive events from Power Automate
 export async function POST(request: NextRequest) {
   try {
-    // Simple auth - check for a secret header
-    const authHeader = request.headers.get('x-tomos-secret');
-    const expectedSecret = process.env.M365_SYNC_SECRET;
-
-    if (expectedSecret && authHeader !== expectedSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await request.json();
 
-    // Handle both single event and array of events
+    // Handle various Power Automate formats
     let events: M365Event[] = [];
 
     if (Array.isArray(body.events)) {
       events = body.events;
     } else if (Array.isArray(body)) {
-      // Power Automate might send array directly
       events = body.map((event: any) => ({
-        id: event.id || event.Id,
+        id: event.id || event.Id || String(Date.now()),
         subject: event.subject || event.Subject || 'Untitled',
-        start: event.start?.dateTime || event.Start || event.start,
-        end: event.end?.dateTime || event.End || event.end,
+        start: event.start?.dateTime || event.Start || event.start || '',
+        end: event.end?.dateTime || event.End || event.end || '',
         location: event.location?.displayName || event.Location || null,
         isAllDay: event.isAllDay || event.IsAllDay || false,
         organizer: event.organizer?.emailAddress?.name || event.Organizer || null,
@@ -56,45 +74,44 @@ export async function POST(request: NextRequest) {
       events = body.value.map((event: any) => ({
         id: event.id,
         subject: event.subject || 'Untitled',
-        start: event.start?.dateTime,
-        end: event.end?.dateTime,
+        start: event.start?.dateTime || '',
+        end: event.end?.dateTime || '',
         location: event.location?.displayName || null,
         isAllDay: event.isAllDay || false,
         organizer: event.organizer?.emailAddress?.name || null,
       }));
     }
 
-    // Store in simple JSON format
     const payload: M365CalendarPayload = {
       events,
       syncedAt: new Date().toISOString(),
       source: 'power-automate',
     };
 
-    // For now, store in environment variable as a workaround
-    // In production, you'd want to use Vercel KV or a database
-    // We'll use a simple file-based approach via Notion page
+    // Store in Notion page
+    const pageId = await getOrCreateStoragePage();
 
-    if (M365_CALENDAR_PAGE_ID) {
-      // Update Notion page with calendar data
-      await notion.blocks.children.append({
-        block_id: M365_CALENDAR_PAGE_ID,
-        children: [
-          {
-            type: 'code',
-            code: {
-              language: 'json',
-              rich_text: [{ type: 'text', text: { content: JSON.stringify(payload, null, 2) } }],
-            },
-          },
-        ],
-      });
+    // Clear existing content and add new
+    const existingBlocks = await notion.blocks.children.list({ block_id: pageId });
+    for (const block of existingBlocks.results) {
+      await notion.blocks.delete({ block_id: block.id });
     }
 
-    // Also cache in global for immediate reads (ephemeral but useful)
-    (global as any).__m365CalendarCache = payload;
+    // Add new content as code block
+    await notion.blocks.children.append({
+      block_id: pageId,
+      children: [
+        {
+          type: 'code',
+          code: {
+            language: 'json',
+            rich_text: [{ type: 'text', text: { content: JSON.stringify(payload, null, 2) } }],
+          },
+        },
+      ],
+    });
 
-    console.log(`M365 Calendar Sync: Received ${events.length} events`);
+    console.log(`M365 Calendar Sync: Stored ${events.length} events in Notion`);
 
     return NextResponse.json({
       success: true,
@@ -110,33 +127,36 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Return cached events for iOS app
+// GET - Return stored events for iOS app
 export async function GET(request: NextRequest) {
   try {
-    // Check in-memory cache first
-    const cached = (global as any).__m365CalendarCache as M365CalendarPayload | undefined;
+    const pageId = await getOrCreateStoragePage();
 
-    if (cached) {
+    // Get the code block content
+    const blocks = await notion.blocks.children.list({ block_id: pageId });
+    const codeBlock = blocks.results.find((block: any) => block.type === 'code') as any;
+
+    if (codeBlock?.code?.rich_text?.[0]?.plain_text) {
+      const payload: M365CalendarPayload = JSON.parse(codeBlock.code.rich_text[0].plain_text);
+
       // Filter to only future events
       const now = new Date();
-      const futureEvents = cached.events.filter(event => {
+      const futureEvents = payload.events.filter(event => {
         const eventStart = new Date(event.start);
         return eventStart >= now;
       });
 
       return NextResponse.json({
         events: futureEvents,
-        syncedAt: cached.syncedAt,
-        source: cached.source,
-        fromCache: true,
+        syncedAt: payload.syncedAt,
+        source: payload.source,
       });
     }
 
-    // If no cache, return empty (Power Automate hasn't synced yet)
     return NextResponse.json({
       events: [],
       syncedAt: null,
-      message: 'No events synced yet. Configure Power Automate to sync events.',
+      message: 'No events synced yet. Run your Power Automate flow.',
     });
   } catch (error) {
     console.error('M365 Calendar Get Error:', error);
