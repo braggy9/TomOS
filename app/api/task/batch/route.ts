@@ -4,7 +4,6 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Client } from '@notionhq/client';
 
 const NOTION_DATABASE_ID = '739144099ebc4ba1ba619dd1a5a08d25';
-const NTFY_TOPIC = 'tomos-tasks-sufgocdozVo4nawcud';
 
 /**
  * Natural Language Batch Import
@@ -276,18 +275,25 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    // Send batch notification
-    console.log('[BATCH] Sending notification...');
-    const notionUrl = `https://notion.so/${NOTION_DATABASE_ID.replace(/-/g, '')}`;
-    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
-      method: 'POST',
-      headers: {
-        Title: `${createdTasks.length} Tasks Captured`,
-        Click: notionUrl,
-        Tags: 'white_check_mark,sparkles',
-      },
-      body: createdTasks.map((t) => `${t.title}`).join('\n'),
-    });
+    // Send APNs push notification for batch import
+    console.log('[BATCH] Sending APNs notification...');
+    try {
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://tomos-task-api.vercel.app';
+
+      await fetch(`${baseUrl}/api/send-push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${createdTasks.length} Tasks Captured`,
+          body: createdTasks.map((t) => t.title).join(', '),
+          badge: createdTasks.length,
+        }),
+      });
+    } catch (error) {
+      console.error('[BATCH] Failed to send push notification:', error);
+    }
 
     console.log(`Batch import: Created ${createdTasks.length} tasks`);
 

@@ -54,21 +54,40 @@ const DEVICE_TOKENS_DATABASE_ID = process.env.NOTION_DEVICE_TOKENS_DB_ID;
 let cachedToken: { token: string; expiry: number } | null = null;
 
 /**
- * Reads the APNs .p8 private key file.
+ * Reads the APNs .p8 private key.
  * The key should be stored securely and not committed to version control.
+ *
+ * Supports two formats:
+ * 1. APNS_AUTH_KEY_BASE64 - Base64 encoded key (recommended, avoids newline issues)
+ * 2. APNS_AUTH_KEY - Raw PEM key with \n escaped
  */
 function getAPNsPrivateKey(): string {
-  // Try environment variable first (recommended for Vercel)
+  // Try base64-encoded key first (most reliable for Vercel)
+  if (process.env.APNS_AUTH_KEY_BASE64) {
+    console.log("Using APNs key from base64 environment variable");
+    const decoded = Buffer.from(process.env.APNS_AUTH_KEY_BASE64, 'base64').toString('utf8');
+    console.log("Key length:", decoded.length, "First 30 chars:", decoded.substring(0, 30));
+    return decoded;
+  }
+
+  // Try raw environment variable
   if (process.env.APNS_AUTH_KEY) {
-    console.log("🔑 Using APNs key from environment variable");
-    return process.env.APNS_AUTH_KEY;
+    console.log("Using APNs key from environment variable");
+    // Convert literal \n sequences to actual newlines (handles various escape formats)
+    let key = process.env.APNS_AUTH_KEY;
+    // Handle literal backslash-n (two chars)
+    key = key.split('\\n').join('\n');
+    // Also handle double-escaped \\n
+    key = key.split('\\\\n').join('\n');
+    console.log("Key length:", key.length, "First 30 chars:", key.substring(0, 30));
+    return key;
   }
 
   // Fall back to file path
   const keyPath = process.env.APNS_AUTH_KEY_PATH || "./AuthKey_TomOS_APNs.p8";
   const absolutePath = path.resolve(process.cwd(), keyPath);
 
-  console.log("🔑 Loading APNs key from:", absolutePath);
+  console.log("Loading APNs key from:", absolutePath);
 
   if (!fs.existsSync(absolutePath)) {
     throw new Error(`APNs key file not found: ${absolutePath}`);
@@ -361,12 +380,19 @@ export async function POST(req: Request) {
       errors,
     });
   } catch (error) {
-    console.error("❌ Error sending push notification:", error);
+    console.error("Error sending push notification:", error);
+    // Log the full error stack to help debug
+    if (error instanceof Error) {
+      console.error("Error name:", error.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
     return NextResponse.json(
       {
         success: false,
         error: "Failed to send push notification",
         details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 }
     );

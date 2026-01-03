@@ -10,7 +10,6 @@ const RequestBody = z.object({
 });
 
 const NOTION_DATABASE_ID = "739144099ebc4ba1ba619dd1a5a08d25";
-const NTFY_TOPIC = "tomos-tasks-sufgocdozVo4nawcud";
 
 interface ParsedTask {
   title: string;
@@ -201,19 +200,7 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
   return response.id;
 }
 
-async function sendNtfyNotification(parsedTask: ParsedTask, notionPageId: string): Promise<void> {
-  const notionUrl = `https://notion.so/${notionPageId.replace(/-/g, "")}`;
-
-  await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
-    method: "POST",
-    headers: {
-      "Title": "Task Captured",
-      "Click": notionUrl,
-      "Tags": "white_check_mark"
-    },
-    body: parsedTask.title
-  });
-}
+// ntfy removed - using APNs push notifications exclusively
 
 async function syncTaskToCalendar(notionPageId: string, parsedTask: ParsedTask): Promise<void> {
   // Only sync if task has a due date and calendar is configured
@@ -276,17 +263,27 @@ function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
   const cronExpression = `${minute} ${hour} ${dayOfMonth} ${month} *`;
 
   cron.schedule(cronExpression, async () => {
-    const notionUrl = `https://notion.so/${notionPageId.replace(/-/g, "")}`;
-    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
-      method: "POST",
-      headers: {
-        "Title": "Task Due Soon",
-        "Click": notionUrl,
-        "Tags": "alarm_clock",
-        "Priority": "4"
-      },
-      body: `${parsedTask.title}\nDue in 15 minutes!`
-    });
+    // Send APNs push notification for task reminder
+    try {
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'https://tomos-task-api.vercel.app';
+
+      await fetch(`${baseUrl}/api/send-push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Task Due Soon',
+          body: `${parsedTask.title}\nDue in 15 minutes!`,
+          task_id: notionPageId,
+          priority: 'urgent',
+          badge: 1,
+        }),
+      });
+      console.log(`Reminder sent for task: ${parsedTask.title}`);
+    } catch (error) {
+      console.error('Failed to send reminder push:', error);
+    }
   });
 }
 
@@ -353,7 +350,6 @@ export async function POST(req: Request) {
 
     const parsedTask = await parseTaskWithClaude(task);
     const notionPageId = await createNotionPage(parsedTask, source);
-    await sendNtfyNotification(parsedTask, notionPageId);
     scheduleReminder(parsedTask, notionPageId);
 
     // Auto-sync to calendar (don't await - run in background)

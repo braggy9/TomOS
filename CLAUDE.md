@@ -4,15 +4,31 @@
 
 Next.js serverless API providing task management, APNs push notifications, and AI-powered features for the TomOS ecosystem.
 
-**Technology:** Next.js 14 App Router, TypeScript, Vercel serverless functions  
-**Deployment:** Vercel (Project ID: `prj_8jEVBTn5EAfmPOc5qcOrJ6VYE2Wr`)  
+**Technology:** Next.js 14 App Router, TypeScript, Vercel serverless functions
+**Deployment:** Vercel (Project ID: `prj_8jEVBTn5EAfmPOc5qcOrJ6VYE2Wr`)
 **Production URL:** `https://tomos-task-api.vercel.app`
 
 ## Repository Information
 
-**Local Path:** `/Users/tombragg/Desktop/Projects/TomOS/`  
-**GitHub:** `github.com/braggy9/TomOS.git` (Public)  
-**Related Repo:** [TomOS-Apps](../../TomOS-Apps/) - Swift iOS/macOS clients
+**Local Path:** `/Users/tombragg/Desktop/Projects/TomOS/`
+**GitHub:** `github.com/braggy9/TomOS.git` (Public)
+**Related Repo:** [TomOS-Apps](/Users/tombragg/Desktop/TomOS-Apps/) - Swift iOS/macOS clients
+
+## Current Status (Updated 2026-01-01)
+
+### Completed
+- iOS push notifications working (device registered)
+- macOS push notifications working (device registered)
+- ntfy fully deprecated and removed - all notifications via APNs
+- NLP task capture with smart date parsing (Sydney timezone)
+- 15-minute reminder notifications via APNs
+- Batch task import with AI parsing
+- GitHub Actions for scheduled notifications
+- Google Calendar sync (optional)
+
+### Registered Devices
+- **iOS:** `f757db2b408a19ec...`
+- **macOS:** `025aeb1d4d823d33...`
 
 ## Project Structure
 
@@ -21,7 +37,8 @@ TomOS/
 ├── app/api/
 │   ├── register-device/     # APNs device token storage
 │   ├── send-push/           # APNs push notification sender
-│   ├── task/                # Task creation + auto-push
+│   ├── task/                # Single task creation + auto-push
+│   │   └── batch/           # Batch task import
 │   ├── tasks/               # Task management
 │   ├── calendar/            # Google Calendar sync
 │   ├── email/               # Email-to-task processing
@@ -42,15 +59,17 @@ TomOS/
 
 ### Core Task Management
 - **Natural Language Processing:** "Review contract tomorrow 3pm" → structured task
-- **Notion Integration:** Publicis Tasks database (NOTION_DATABASE_ID)
-- **Multi-Context Support:** Publicis, MixTape, Bison, Personal
+- **Notion Integration:** Tasks database (NOTION_DATABASE_ID: `739144099ebc4ba1ba619dd1a5a08d25`)
+- **Multi-Context Support:** Work, Client Projects, Strategy, Admin, Legal Review
 - **Automatic Parsing:** Priority, due dates, energy levels, time estimates
+- **Batch Import:** Multiple tasks from brain dump text
 
 ### Push Notifications (APNs)
 - **HTTP/2 Native:** No deprecated libraries
 - **JWT Authentication:** 50-min token caching
 - **Device Management:** Notion database for active devices
 - **Automatic Triggers:** Task creation → push to all devices
+- **15-minute Reminders:** Scheduled via node-cron for tasks with due dates
 - **Rich Payloads:** Title, body, badge, category, custom data
 
 ### Integrations
@@ -59,10 +78,11 @@ TomOS/
 - **Notion Database:** Single source of truth
 - **GitHub Actions:** Scheduled morning/EOD summaries
 
-### AI Features
-- **Task Suggestions:** AI-powered recommendations
-- **Task Breakdown:** Large tasks → subtasks
-- **Context Analysis:** Smart priority and energy detection
+### AI Features (Claude claude-sonnet-4-5-20250929)
+- **Task Parsing:** Natural language → structured task data
+- **Smart Date Extraction:** "tomorrow", "next Friday", "in 2 hours"
+- **Context Detection:** Auto-categorize by content
+- **Priority Inference:** Detect urgency from language
 
 ## Environment Variables
 
@@ -70,15 +90,22 @@ TomOS/
 ```
 # Notion
 NOTION_API_KEY=secret_xxx
-NOTION_DATABASE_ID=xxx  # Publicis Tasks
-NOTION_DEVICE_TOKENS_DB_ID=xxx  # Created on first device registration
+NOTION_DATABASE_ID=739144099ebc4ba1ba619dd1a5a08d25
+NOTION_DEVICE_TOKENS_DB_ID=2db46505-452d-818f-bd20-d6e9b60b602f
+NOTION_PARENT_PAGE_ID=26f46505452d8001a172c824053753e9
 
 # APNs
 APNS_KEY_ID=Z5X44X9KD7
 APNS_TEAM_ID=89NX9R78Y7
-APNS_TOPIC=com.tomos.ios
+APNS_TOPIC=com.tomos.app
 APNS_ENVIRONMENT=development
-APNS_AUTH_KEY=-----BEGIN PRIVATE KEY-----\nMIGT...
+APNS_AUTH_KEY_BASE64=<base64-encoded .p8 key>
+
+# AI
+ANTHROPIC_API_KEY=sk-ant-xxx
+
+# Scheduled Jobs
+CRON_SECRET=xxx
 ```
 
 **Optional:**
@@ -86,24 +113,30 @@ APNS_AUTH_KEY=-----BEGIN PRIVATE KEY-----\nMIGT...
 # Google Calendar (if using)
 GOOGLE_CLIENT_ID=xxx
 GOOGLE_CLIENT_SECRET=xxx
+GOOGLE_CALENDAR_REFRESH_TOKEN=xxx
 ```
 
 ## API Endpoints
 
 ### Task Management
 
-**Create Task**
+**Create Single Task**
 ```bash
 POST /api/task
 {
-  "task": "Review quarterly report tomorrow 2pm urgent"
+  "task": "Review quarterly report tomorrow 2pm urgent",
+  "source": "Alfred"  # optional, defaults to "Alfred"
 }
 ```
 
-**Response:**
-- Creates task in Notion
-- Parses: priority (urgent), due date (tomorrow 2pm), context (inferred)
-- Sends push notification to all registered devices
+**Batch Import Tasks**
+```bash
+POST /api/task/batch
+{
+  "tasks": "dentist tomorrow, review contract #urgent @john, prep slides for friday",
+  "source": "Batch Import"
+}
+```
 
 ### APNs Device Registration
 
@@ -112,47 +145,39 @@ POST /api/task
 POST /api/register-device
 {
   "device_token": "abc123...",
-  "platform": "ios"  # or "macos"
+  "platform": "ios",  # or "macos"
+  "bundle_id": "com.tomos.app",
+  "app_version": "1.0"
 }
 ```
 
-**Response:**
-- Upserts device in Notion "TomOS Device Tokens" database
-- Returns success/failure
-- Device auto-marked as Active
-
 ### Push Notifications
 
-**Send Push (Internal)**
+**Send Push**
 ```bash
 POST /api/send-push
 {
   "title": "Task Reminder",
   "body": "Review quarterly report",
   "task_id": "notion-page-id",
-  "priority": "urgent"
+  "priority": "urgent",
+  "badge": 1
 }
 ```
 
-**Flow:**
-1. Query Notion for active devices
-2. Generate JWT token (cached 50min)
-3. HTTP/2 POST to `api.sandbox.push.apple.com`
-4. Return delivery status
-
 ### Scheduled Notifications
 
-**Morning Overview**
+**Morning Overview** (8am Sydney via GitHub Actions)
 ```bash
 GET /api/notifications/morning-overview
+Authorization: Bearer <CRON_SECRET>
 ```
 
-**EOD Summary**
+**EOD Summary** (6pm Sydney via GitHub Actions)
 ```bash
 GET /api/notifications/eod-summary
+Authorization: Bearer <CRON_SECRET>
 ```
-
-Triggered by GitHub Actions cron jobs.
 
 ## Deployment
 
@@ -180,182 +205,62 @@ vercel logs --prod
 vercel inspect <deployment-url>
 ```
 
-### Rollback
-
-Go to Vercel dashboard → Deployments → Promote previous deployment
-
 ## Testing Endpoints
 
 ```bash
 # Health check
 curl https://tomos-task-api.vercel.app/api/health
 
-# Register device
-curl -X POST https://tomos-task-api.vercel.app/api/register-device \
+# Send test push to all devices
+curl -X POST https://tomos-task-api.vercel.app/api/send-push \
   -H "Content-Type: application/json" \
-  -d '{"device_token":"test-123","platform":"ios"}'
+  -d '{"title":"Test","body":"APNs test","badge":1}'
 
 # Create task
 curl -X POST https://tomos-task-api.vercel.app/api/task \
   -H "Content-Type: application/json" \
   -d '{"task":"Test task urgent tomorrow"}'
-
-# Send push notification
-curl -X POST https://tomos-task-api.vercel.app/api/send-push \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Test","body":"APNs test"}'
-```
-
-## APNs Architecture
-
-### HTTP/2 + JWT Flow
-
-```
-1. Query Notion for active device tokens
-2. Generate JWT (ES256 algorithm)
-   - Header: kid, alg
-   - Payload: iss (Team ID), iat (timestamp)
-   - Sign with .p8 private key
-3. Cache token for 50 minutes
-4. For each device:
-   - HTTP/2 POST to api.sandbox.push.apple.com
-   - Headers: authorization (Bearer JWT), apns-topic
-   - Body: JSON payload
-5. Return delivery results
-```
-
-### Notification Payload
-
-```json
-{
-  "aps": {
-    "alert": {
-      "title": "Task Reminder",
-      "body": "Review quarterly report"
-    },
-    "sound": "default",
-    "badge": 1,
-    "category": "TASK_NOTIFICATION",
-    "mutable-content": 1
-  },
-  "task_id": "notion-page-id",
-  "priority": "urgent",
-  "type": "task_notification"
-}
 ```
 
 ## Database Schema
 
-### Publicis Tasks (Notion)
+### Tasks (Notion)
 
 **Properties:**
 - Task (title)
-- Context (select): Publicis, MixTape, Bison, Personal
+- Context (multi_select): Work, Client Projects, Strategy, Admin, Legal Review
 - Priority (select): Urgent, Important, Someday
 - Due Date (date)
-- Status (select): To Do, In Progress, Done
+- Status (select): Inbox, To Do, In Progress, Done
 - Energy (select): High, Medium, Low
-- Time Estimate (number)
+- Time (select): Quick, Short, Long
+- Source (select): Alfred, Batch Import, Email, etc.
+- Captured (date)
 
 ### TomOS Device Tokens (Notion)
 
 **Properties:**
 - Device Token (title)
-- Platform (select): ios, macos
+- Platform (select): ios, macos, ipados
+- Bundle ID (rich_text)
+- App Version (rich_text)
 - Last Updated (date)
 - Active (checkbox)
 
-## Vercel Configuration
-
-**vercel.json:**
-```json
-{
-  "framework": "nextjs",
-  "regions": ["syd1"],
-  "env": {
-    "NOTION_API_KEY": "@notion-api-key"
-  }
-}
-```
-
-**Region:** Sydney (syd1) for low latency
-
-## GitHub Actions
-
-**Workflows:**
-- `.github/workflows/scheduled-notifications.yml`
-  - Triggers: 7am, 6pm Sydney time
-  - Calls morning-overview and eod-summary endpoints
-  - Requires CRON_SECRET for auth
-
 ## User Context
 
-**User:** Tom Bragg  
-**Timezone:** Australia/Sydney (AEDT, UTC+11)  
-**Work Contexts:** Publicis (legal), MixTape (running), Bison (consulting), Personal  
+**User:** Tom Bragg
+**Timezone:** Australia/Sydney (AEDT, UTC+11)
+**Work Contexts:** Work, Client Projects, Strategy, Admin, Legal Review
 **ADHD Workflow:** Needs automatic task structuring, reliable notifications, minimal friction
-
-## Common Tasks
-
-**Add New API Endpoint:**
-```bash
-mkdir -p app/api/my-endpoint
-touch app/api/my-endpoint/route.ts
-```
-
-**Update Environment Variables:**
-1. Vercel Dashboard → tomos-task-api → Settings → Environment Variables
-2. Add/Edit variables
-3. Redeploy: `vercel --prod`
-
-**Debug APNs Issues:**
-1. Check Vercel logs: `vercel logs --prod --follow`
-2. Verify env vars set (APNS_*)
-3. Test device registration endpoint
-4. Check Notion database for active devices
-5. Verify JWT token generation
-
-**Migrate from ntfy to APNs:**
-- Old: ntfy.sh with headers
-- New: Native APNs via HTTP/2
-- Migration complete ✅
-
-## Git Workflow
-
-```bash
-# After each working phase
-git add .
-git commit -m "Phase description"
-git push  # Auto-deploys to Vercel
-
-# Check deployment
-vercel ls
-```
-
-## Related Documentation
-
-See `.claude/context/docs-index.md` for links to:
-- APNs setup guide
-- API endpoint documentation
-- Notion database schemas
-- Integration guides
 
 ## Quick Reference
 
-**Need frontend changes?** Switch to `/Users/tombragg/Desktop/TomOS-Apps/`  
-**Deployment failed?** Check Vercel logs and environment variables  
-**APNs not working?** Verify .p8 key, device tokens in Notion, sandbox environment  
+**Need frontend changes?** Switch to `/Users/tombragg/Desktop/TomOS-Apps/`
+**Deployment failed?** Check Vercel logs and environment variables
+**APNs not working?** Verify .p8 key, device tokens in Notion, APNS_TOPIC=com.tomos.app
 **Rate limited?** JWT tokens cached 50min to avoid APNs limits
 
-## Dependencies
+---
 
-```json
-{
-  "dependencies": {
-    "next": "^14.0.0",
-    "jsonwebtoken": "^9.0.2"
-  }
-}
-```
-
-**No node-apn:** Using native HTTP/2 implementation instead
+*Last updated: 2026-01-01*

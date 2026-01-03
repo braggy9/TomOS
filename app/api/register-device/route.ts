@@ -37,7 +37,8 @@ const RequestBody = z.object({
 const DEVICE_TOKENS_DATABASE_ID = process.env.NOTION_DEVICE_TOKENS_DB_ID;
 
 // Parent page ID where the database will be created if needed
-const NOTION_PARENT_PAGE_ID = process.env.NOTION_PARENT_PAGE_ID || "739144099ebc4ba1ba619dd1a5a08d25";
+// Must be a PAGE id, not a database id
+const NOTION_PARENT_PAGE_ID = process.env.NOTION_PARENT_PAGE_ID || "26f46505452d8001a172c824053753e9";
 
 /**
  * Creates the Device Tokens database in Notion if it doesn't exist.
