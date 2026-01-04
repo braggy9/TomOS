@@ -188,11 +188,9 @@ ${summary}`,
     notificationBody += `\n\n🤖 ${aiReflection}\n\n👉 View Dashboard`;
 
     // Send APNs push notification to iOS/macOS devices
-    const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'https://tomos-task-api.vercel.app';
-
-    const pushResponse = await fetch(`${baseUrl}/api/send-push`, {
+    // Always use the production URL for internal API calls to avoid VERCEL_URL issues
+    // (VERCEL_URL points to deployment-specific URLs that may not have all env vars)
+    const pushResponse = await fetch('https://tomos-task-api.vercel.app/api/send-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
