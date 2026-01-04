@@ -14,7 +14,7 @@ Next.js serverless API providing task management, APNs push notifications, and A
 **GitHub:** `github.com/braggy9/TomOS.git` (Public)
 **Related Repo:** [TomOS-Apps](/Users/tombragg/Desktop/TomOS-Apps/) - Swift iOS/macOS clients
 
-## Current Status (Updated 2026-01-01)
+## Current Status (Updated 2026-01-05)
 
 ### Completed
 - iOS push notifications working (device registered)
@@ -23,8 +23,17 @@ Next.js serverless API providing task management, APNs push notifications, and A
 - NLP task capture with smart date parsing (Sydney timezone)
 - 15-minute reminder notifications via APNs
 - Batch task import with AI parsing
-- GitHub Actions for scheduled notifications
+- GitHub Actions for scheduled notifications (fixed 2026-01-05)
 - Google Calendar sync (optional)
+- Automatic device deactivation on APNs 410 errors
+
+### Recent Fixes (2026-01-05)
+- **VERCEL_URL Fix:** Scheduled notifications (morning-overview, eod-summary) now use
+  hardcoded production URL instead of `VERCEL_URL` environment variable. This fixes
+  issues where internal API calls were hitting deployment-specific URLs that returned
+  HTML error pages instead of JSON.
+- **Device Deactivation:** send-push endpoint now automatically marks devices as inactive
+  when APNs returns 410 (device unregistered) errors.
 
 ### Registered Devices
 - **iOS:** `f757db2b408a19ec...`

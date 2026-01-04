@@ -140,11 +140,12 @@ function getAPNsToken(): string {
 
 /**
  * Sends a push notification to a single device via APNs HTTP/2.
+ * Returns status code along with success/error for handling 410 (unregistered) devices.
  */
 async function sendToDevice(
   deviceToken: string,
   payload: object
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; status?: number }> {
   return new Promise((resolve) => {
     try {
       const token = getAPNsToken();
@@ -174,13 +175,14 @@ async function sendToDevice(
       const req = client.request(headers);
 
       let responseData = "";
+      let responseStatus = 0;
 
       req.on("response", (headers) => {
-        const status = headers[":status"];
-        console.log(`   Status: ${status}`);
+        responseStatus = headers[":status"] as number;
+        console.log(`   Status: ${responseStatus}`);
 
-        if (status === 200) {
-          resolve({ success: true });
+        if (responseStatus === 200) {
+          resolve({ success: true, status: 200 });
         }
       });
 
@@ -195,11 +197,16 @@ async function sendToDevice(
             const response = JSON.parse(responseData);
             if (response.reason) {
               console.error(`   Error: ${response.reason}`);
-              resolve({ success: false, error: response.reason });
+              resolve({ success: false, error: response.reason, status: responseStatus });
             }
           } catch {
             // Ignore parse errors for empty responses
           }
+        }
+        // Handle 410 (Unregistered) - device token is no longer valid
+        if (responseStatus === 410) {
+          console.log(`   ⚠️ Device unregistered (410) - marking for deactivation`);
+          resolve({ success: false, error: "DeviceTokenNotForTopic", status: 410 });
         }
       });
 
@@ -227,6 +234,38 @@ async function sendToDevice(
       });
     }
   });
+}
+
+/**
+ * Deactivates a device token in Notion (marks as inactive).
+ * Called when APNs returns 410 (device unregistered).
+ */
+async function deactivateDevice(notion: Client, deviceToken: string): Promise<void> {
+  if (!DEVICE_TOKENS_DATABASE_ID) return;
+
+  try {
+    // Find the device
+    const response = await notion.databases.query({
+      database_id: DEVICE_TOKENS_DATABASE_ID,
+      filter: {
+        property: "Device Token",
+        title: { equals: deviceToken },
+      },
+    });
+
+    if (response.results.length > 0) {
+      const pageId = response.results[0].id;
+      await notion.pages.update({
+        page_id: pageId,
+        properties: {
+          "Active": { checkbox: false },
+        },
+      });
+      console.log(`   ✓ Device ${deviceToken.substring(0, 16)}... marked as inactive`);
+    }
+  } catch (error) {
+    console.error(`   ⚠️ Failed to deactivate device:`, error);
+  }
 }
 
 /**
@@ -350,6 +389,7 @@ export async function POST(req: Request) {
     const results: Array<{ device: string; success: boolean; error?: string }> = [];
     const successfulDevices: string[] = [];
     const errors: Array<{ device: string; error: string }> = [];
+    const devicesToDeactivate: string[] = [];
 
     for (const device of devices) {
       const result = await sendToDevice(device.token, payload);
@@ -366,6 +406,20 @@ export async function POST(req: Request) {
           device: device.token.substring(0, 16) + "...",
           error: result.error || "Unknown error",
         });
+        // Mark devices for deactivation if they returned 410 (unregistered)
+        if (result.status === 410) {
+          devicesToDeactivate.push(device.token);
+        }
+      }
+    }
+
+    // Deactivate any devices that returned 410 (don't block the response)
+    if (devicesToDeactivate.length > 0) {
+      console.log(`🔄 Deactivating ${devicesToDeactivate.length} unregistered device(s)...`);
+      for (const token of devicesToDeactivate) {
+        deactivateDevice(notion, token).catch((err) =>
+          console.error(`Failed to deactivate device:`, err)
+        );
       }
     }
 
