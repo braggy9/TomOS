@@ -83,11 +83,22 @@ export async function POST(request: NextRequest) {
       }));
     }
 
+    // Filter to only upcoming events (next 30 days) to avoid Notion 413 errors
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const upcomingEvents = events.filter(event => {
+      const eventStart = new Date(event.start);
+      return eventStart >= now && eventStart <= thirtyDaysFromNow;
+    });
+
     const payload: M365CalendarPayload = {
-      events,
+      events: upcomingEvents,
       syncedAt: new Date().toISOString(),
       source: 'power-automate',
     };
+
+    console.log(`M365 Calendar Sync: Filtered ${events.length} events to ${upcomingEvents.length} upcoming events`);
 
     // Store in Notion page
     const pageId = await getOrCreateStoragePage();
@@ -112,11 +123,13 @@ export async function POST(request: NextRequest) {
       ],
     });
 
-    console.log(`M365 Calendar Sync: Stored ${events.length} events in Notion`);
+    console.log(`M365 Calendar Sync: Stored ${upcomingEvents.length} upcoming events in Notion (filtered from ${events.length} total)`);
 
     return NextResponse.json({
       success: true,
       received: events.length,
+      stored: upcomingEvents.length,
+      filtered: events.length - upcomingEvents.length,
       syncedAt: payload.syncedAt,
     });
   } catch (error) {
