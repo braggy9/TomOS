@@ -7,6 +7,9 @@ import cron from "node-cron";
 const RequestBody = z.object({
   task: z.string().min(1),
   source: z.string().optional().default("Alfred"),
+  tags: z.array(z.string()).optional().default([]),
+  context: z.string().optional(),
+  suggest_tags: z.boolean().optional().default(false),
 });
 
 const NOTION_DATABASE_ID = "739144099ebc4ba1ba619dd1a5a08d25";
@@ -344,7 +347,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { task, source } = parsed.data;
+    const { task, source, tags: userTags, context: userContext, suggest_tags } = parsed.data;
 
     if (!process.env.NOTION_API_KEY) {
       return NextResponse.json(
@@ -354,7 +357,17 @@ export async function POST(req: Request) {
     }
 
     const parsedTask = await parseTaskWithClaude(task);
-    const notionPageId = await createNotionPage(parsedTask, source);
+
+    // Merge user-provided tags with Claude-parsed tags
+    const allTags = [...new Set([...userTags, ...parsedTask.tags])];
+    const finalTask = { ...parsedTask, tags: allTags };
+
+    // Use user context if provided
+    if (userContext) {
+      finalTask.context = userContext as any;
+    }
+
+    const notionPageId = await createNotionPage(finalTask, source);
     scheduleReminder(parsedTask, notionPageId);
 
     // Auto-sync to calendar (don't await - run in background)
