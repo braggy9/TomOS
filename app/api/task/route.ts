@@ -41,12 +41,17 @@ async function parseTaskWithClaude(taskDescription: string): Promise<ParsedTask>
 - time: One of "Quick" (< 15 min), "Short" (15-60 min), or "Long" (> 60 min) (string)
 - dueDate: ISO 8601 date string in Sydney timezone (Australia/Sydney) if a due date is mentioned. Handle relative dates like "tomorrow", "next week", "Friday", etc. based on the current date/time provided above. Return null if no due date/time is mentioned
 - subtasks: Array of subtask strings extracted from bullet points (-, *, •) or numbered lists (1., 2., etc.). Empty array if none. (array of strings)
-- tags: Array of hashtags found in the task description (e.g., #urgent, #review). Extract without the # symbol. Empty array if none. (array of strings)
+- tags: Array of tags found in the task description. This includes:
+  1. Hashtags (e.g., #urgent, #review) - extract without the # symbol
+  2. Prefix-based tags (e.g., proj:mixtape, area:work, act:research, topic:ai) - extract with the full prefix:value format
+  Empty array if none. (array of strings)
 - mentions: Array of @mentions found (e.g., @john, @sarah). Extract without the @ symbol. Empty array if none. (array of strings)
 
 Examples:
 - "Review contract #urgent @legal - Check clauses - Verify signatures" → subtasks: ["Check clauses", "Verify signatures"], tags: ["urgent"], mentions: ["legal"]
+- "Fix bug proj:tomos area:work" → subtasks: [], tags: ["proj:tomos", "area:work"], mentions: []
 - "Call dentist tomorrow" → subtasks: [], tags: [], mentions: []
+- "Meeting prep proj:mixtape #urgent" → subtasks: [], tags: ["proj:mixtape", "urgent"], mentions: []
 
 Task description: ${taskDescription}
 
