@@ -46,15 +46,20 @@ async function parseTaskWithClaude(taskDescription: string): Promise<ParsedTask>
 - subtasks: Array of subtask strings extracted from bullet points (-, *, •) or numbered lists (1., 2., etc.). Empty array if none. (array of strings)
 - tags: Array of tags found in the task description. This includes:
   1. Hashtags (e.g., #urgent, #review) - extract without the # symbol
-  2. Prefix-based tags (e.g., proj:mixtape, area:work, act:research, topic:ai) - extract with the full prefix:value format
+  2. Prefix-based tags with these prefixes (extract with full prefix:value format):
+     - Project: proj:, pro:, or p: (e.g., proj:mixtape, pro:mixtape, p:mixtape)
+     - Area: area: or a: (e.g., area:work, a:work)
+     - Action: act: (e.g., act:research)
+     - Topic: topic: or t: (e.g., topic:ai, t:ai)
   Empty array if none. (array of strings)
 - mentions: Array of @mentions found (e.g., @john, @sarah). Extract without the @ symbol. Empty array if none. (array of strings)
 
 Examples:
 - "Review contract #urgent @legal - Check clauses - Verify signatures" → subtasks: ["Check clauses", "Verify signatures"], tags: ["urgent"], mentions: ["legal"]
 - "Fix bug proj:tomos area:work" → subtasks: [], tags: ["proj:tomos", "area:work"], mentions: []
+- "Fix bug p:tomos a:work" → subtasks: [], tags: ["p:tomos", "a:work"], mentions: []
 - "Call dentist tomorrow" → subtasks: [], tags: [], mentions: []
-- "Meeting prep proj:mixtape #urgent" → subtasks: [], tags: ["proj:mixtape", "urgent"], mentions: []
+- "Meeting prep pro:mixtape #urgent" → subtasks: [], tags: ["pro:mixtape", "urgent"], mentions: []
 
 Task description: ${taskDescription}
 
@@ -79,6 +84,27 @@ Return ONLY valid JSON, no markdown or explanation.`;
 
   const parsed = JSON.parse(jsonText) as ParsedTask;
   return parsed;
+}
+
+function normalizeTagShortcuts(tags: string[]): string[] {
+  return tags.map(tag => {
+    // Normalize project shortcuts: p: or pro: → proj:
+    if (tag.startsWith('p:')) {
+      return tag.replace(/^p:/, 'proj:');
+    }
+    if (tag.startsWith('pro:')) {
+      return tag.replace(/^pro:/, 'proj:');
+    }
+    // Normalize area shortcuts: a: → area:
+    if (tag.startsWith('a:')) {
+      return tag.replace(/^a:/, 'area:');
+    }
+    // Normalize topic shortcuts: t: → topic:
+    if (tag.startsWith('t:')) {
+      return tag.replace(/^t:/, 'topic:');
+    }
+    return tag;
+  });
 }
 
 async function createNotionPage(parsedTask: ParsedTask, source: string): Promise<string> {
@@ -358,9 +384,10 @@ export async function POST(req: Request) {
 
     const parsedTask = await parseTaskWithClaude(task);
 
-    // Merge user-provided tags with Claude-parsed tags
-    const allTags = [...new Set([...userTags, ...parsedTask.tags])];
-    const finalTask = { ...parsedTask, tags: allTags };
+    // Merge user-provided tags with Claude-parsed tags, then normalize shortcuts
+    const mergedTags = [...new Set([...userTags, ...parsedTask.tags])];
+    const normalizedTags = normalizeTagShortcuts(mergedTags);
+    const finalTask = { ...parsedTask, tags: normalizedTags };
 
     // Use user context if provided
     if (userContext) {
