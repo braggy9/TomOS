@@ -83,22 +83,23 @@ export async function POST(request: NextRequest) {
       }));
     }
 
-    // Filter to only upcoming events (next 30 days) to avoid Notion 413 errors
+    // Filter to recent and upcoming events (90 day window) to avoid Notion 413 errors
     const now = new Date();
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const upcomingEvents = events.filter(event => {
+    const relevantEvents = events.filter(event => {
       const eventStart = new Date(event.start);
-      return eventStart >= now && eventStart <= thirtyDaysFromNow;
+      return eventStart >= sevenDaysAgo && eventStart <= ninetyDaysFromNow;
     });
 
     const payload: M365CalendarPayload = {
-      events: upcomingEvents,
+      events: relevantEvents,
       syncedAt: new Date().toISOString(),
       source: 'power-automate',
     };
 
-    console.log(`M365 Calendar Sync: Filtered ${events.length} events to ${upcomingEvents.length} upcoming events`);
+    console.log(`M365 Calendar Sync: Stored ${relevantEvents.length} events (filtered from ${events.length} total)`);
 
     // Store in Notion page
     const pageId = await getOrCreateStoragePage();
@@ -123,13 +124,13 @@ export async function POST(request: NextRequest) {
       ],
     });
 
-    console.log(`M365 Calendar Sync: Stored ${upcomingEvents.length} upcoming events in Notion (filtered from ${events.length} total)`);
+    console.log(`M365 Calendar Sync: Stored ${relevantEvents.length} events in Notion (filtered from ${events.length} total)`);
 
     return NextResponse.json({
       success: true,
       received: events.length,
-      stored: upcomingEvents.length,
-      filtered: events.length - upcomingEvents.length,
+      stored: relevantEvents.length,
+      filtered: events.length - relevantEvents.length,
       syncedAt: payload.syncedAt,
     });
   } catch (error) {
