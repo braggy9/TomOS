@@ -14,6 +14,26 @@ Next.js serverless API providing task management, APNs push notifications, and A
 **GitHub:** `github.com/braggy9/TomOS.git` (Public)
 **Related Repo:** [TomOS-Apps](/Users/tombragg/Desktop/TomOS-Apps/) - Swift iOS/macOS clients
 
+## Backend Migration (Notion → PostgreSQL)
+
+**Status:** Planned for Q1 2026
+**Documentation:** `/docs/postgres-migration/`
+
+**Migration Goals:**
+- 20-60x performance improvement
+- No API rate limits
+- Better data integrity (foreign keys, transactions)
+- Foundation for MatterOS, LegalOS, NexusOS
+
+**Quick Start:**
+- Read: `/docs/postgres-migration/QUICK-REF.md`
+- Full Guide: `/docs/postgres-migration/MASTER.md`
+- Sessions: 4 phases over 4-5 days (6-10 hours total)
+
+**Why:** Current Notion API is slow (2-3s dashboard loads), rate-limited (3 req/s), and can't support advanced queries needed for the full TomOS ecosystem.
+
+---
+
 ## Current Status (Updated 2026-01-07)
 
 ### Completed
