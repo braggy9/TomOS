@@ -3,6 +3,7 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { Client } from "@notionhq/client";
 import cron from "node-cron";
+import { prisma } from "@/lib/prisma";
 
 const RequestBody = z.object({
   task: z.string().min(1),
@@ -13,6 +14,7 @@ const RequestBody = z.object({
 });
 
 const NOTION_DATABASE_ID = "739144099ebc4ba1ba619dd1a5a08d25";
+const USE_POSTGRES = process.env.USE_POSTGRES === "true";
 
 interface ParsedTask {
   title: string;
@@ -234,6 +236,76 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
   return response.id;
 }
 
+async function createPostgresTask(parsedTask: ParsedTask, source: string, userTags: string[]): Promise<string> {
+  console.log('Creating Postgres task with parsed data:', JSON.stringify(parsedTask, null, 2));
+
+  // Map Notion priority to Prisma priority
+  const priorityMap: Record<string, string> = {
+    'Urgent': 'urgent',
+    'Important': 'high',
+    'Someday': 'low',
+  };
+  const priority = priorityMap[parsedTask.priority] || 'medium';
+
+  // Build description from subtasks, tags, and mentions
+  const descriptionParts: string[] = [];
+
+  if (parsedTask.subtasks.length > 0) {
+    descriptionParts.push('Subtasks:\n' + parsedTask.subtasks.map(st => `- ${st}`).join('\n'));
+  }
+
+  if (parsedTask.tags.length > 0) {
+    descriptionParts.push('\nTags: ' + parsedTask.tags.map(t => `#${t}`).join(', '));
+  }
+
+  if (parsedTask.mentions.length > 0) {
+    descriptionParts.push('\nMentions: ' + parsedTask.mentions.map(m => `@${m}`).join(', '));
+  }
+
+  // Create metadata tags for Notion-specific fields
+  const metadataTags: string[] = [
+    `context:${parsedTask.context}`,
+    `energy:${parsedTask.energy}`,
+    `time:${parsedTask.time}`,
+    `source:${source}`,
+  ];
+
+  // Merge all tags
+  const allTags = [...new Set([...userTags, ...parsedTask.tags, ...metadataTags])];
+
+  // Create task in Postgres
+  const task = await prisma.task.create({
+    data: {
+      title: parsedTask.title,
+      description: descriptionParts.join('\n') || null,
+      status: 'todo',
+      priority,
+      dueDate: parsedTask.dueDate ? new Date(parsedTask.dueDate) : null,
+    },
+  });
+
+  // Create or connect tags
+  for (const tagName of allTags) {
+    // Find or create tag
+    const tag = await prisma.tag.upsert({
+      where: { name: tagName },
+      update: {},
+      create: { name: tagName },
+    });
+
+    // Link tag to task
+    await prisma.taskTag.create({
+      data: {
+        taskId: task.id,
+        tagId: tag.id,
+      },
+    });
+  }
+
+  console.log(`✅ Created Postgres task: ${task.id}`);
+  return task.id;
+}
+
 // ntfy removed - using APNs push notifications exclusively
 
 async function syncTaskToCalendar(notionPageId: string, parsedTask: ParsedTask): Promise<void> {
@@ -375,13 +447,7 @@ export async function POST(req: Request) {
 
     const { task, source, tags: userTags, context: userContext, suggest_tags } = parsed.data;
 
-    if (!process.env.NOTION_API_KEY) {
-      return NextResponse.json(
-        { error: "NOTION_API_KEY is not configured" },
-        { status: 500 }
-      );
-    }
-
+    // Parse task with Claude AI
     const parsedTask = await parseTaskWithClaude(task);
 
     // Merge user-provided tags with Claude-parsed tags, then normalize shortcuts
@@ -392,6 +458,40 @@ export async function POST(req: Request) {
     // Use user context if provided
     if (userContext) {
       finalTask.context = userContext as any;
+    }
+
+    // NEW: Postgres implementation
+    if (USE_POSTGRES) {
+      const taskId = await createPostgresTask(finalTask, source, normalizedTags);
+      scheduleReminder(parsedTask, taskId);
+
+      // Auto-sync to calendar (don't await - run in background)
+      syncTaskToCalendar(taskId, parsedTask).catch(err =>
+        console.error('Background calendar sync error:', err)
+      );
+
+      // Send APNs push notification to iOS/macOS devices (don't await - run in background)
+      sendAPNsPushNotification(parsedTask, taskId).catch(err =>
+        console.error('Background APNs push error:', err)
+      );
+
+      console.log(`📋 Created task in Postgres: ${taskId}`);
+
+      return NextResponse.json({
+        success: true,
+        taskId,
+        parsedTask,
+        message: "Task created successfully",
+        source: 'postgres',
+      });
+    }
+
+    // OLD: Notion implementation (fallback)
+    if (!process.env.NOTION_API_KEY) {
+      return NextResponse.json(
+        { error: "NOTION_API_KEY is not configured" },
+        { status: 500 }
+      );
     }
 
     const notionPageId = await createNotionPage(finalTask, source);
@@ -407,11 +507,14 @@ export async function POST(req: Request) {
       console.error('Background APNs push error:', err)
     );
 
+    console.log(`📋 Created task in Notion: ${notionPageId}`);
+
     return NextResponse.json({
       success: true,
       notionPageId,
       parsedTask,
       message: "Task created successfully",
+      source: 'notion',
     });
   } catch (error) {
     console.error("Error processing task:", error);

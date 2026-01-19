@@ -1,15 +1,66 @@
 import { NextResponse } from "next/server";
 import { Client } from "@notionhq/client";
+import { prisma } from "@/lib/prisma";
 
 const NOTION_DATABASE_ID = "739144099ebc4ba1ba619dd1a5a08d25";
+const USE_POSTGRES = process.env.USE_POSTGRES === "true";
 
 /**
- * GET /api/tasks
- * Returns all tasks from Notion database
+ * GET /api/all-tasks
+ * Returns all tasks from Postgres or Notion database
  * Simple endpoint for iOS/macOS app task list view
  */
 export async function GET() {
   try {
+    // NEW: Postgres implementation
+    if (USE_POSTGRES) {
+      const tasks = await prisma.task.findMany({
+        include: {
+          project: {
+            select: {
+              id: true,
+              title: true,
+              color: true,
+            }
+          },
+          tags: {
+            include: {
+              tag: true
+            }
+          }
+        },
+        orderBy: [
+          { priority: 'desc' }, // urgent > high > medium > low
+          { dueDate: 'asc' },   // soonest first
+        ],
+        take: 100,
+      });
+
+      const formattedTasks = tasks.map(task => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate?.toISOString() || null,
+        completedAt: task.completedAt?.toISOString() || null,
+        project: task.project,
+        tags: task.tags.map(tt => tt.tag),
+        createdAt: task.createdAt.toISOString(),
+        updatedAt: task.updatedAt.toISOString(),
+      }));
+
+      console.log(`📋 Retrieved ${formattedTasks.length} tasks from Postgres`);
+
+      return NextResponse.json({
+        success: true,
+        count: formattedTasks.length,
+        tasks: formattedTasks,
+        source: 'postgres',
+      });
+    }
+
+    // OLD: Notion implementation (fallback)
     if (!process.env.NOTION_API_KEY) {
       return NextResponse.json(
         { error: "NOTION_API_KEY is not configured" },
@@ -58,6 +109,7 @@ export async function GET() {
       success: true,
       count: tasks.length,
       tasks,
+      source: 'notion',
     });
   } catch (error) {
     console.error("Error fetching tasks:", error);

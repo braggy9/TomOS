@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Client } from "@notionhq/client";
 import { z } from "zod";
+import { prisma } from "@/lib/prisma";
 
 const UpdateTaskBody = z.object({
   title: z.string().min(1).optional(),
@@ -10,6 +11,8 @@ const UpdateTaskBody = z.object({
   dueDate: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
 });
+
+const USE_POSTGRES = process.env.USE_POSTGRES === "true";
 
 export async function PATCH(
   req: Request,
@@ -22,6 +25,126 @@ export async function PATCH(
     // Validate request body
     const validatedData = UpdateTaskBody.parse(body);
 
+    // NEW: Postgres implementation
+    if (USE_POSTGRES) {
+      // Map Notion values to Prisma values
+      const statusMap: Record<string, string> = {
+        'Inbox': 'todo',
+        'To Do': 'todo',
+        'In Progress': 'in_progress',
+        'Done': 'done',
+      };
+
+      const priorityMap: Record<string, string> = {
+        'Urgent': 'urgent',
+        'Important': 'high',
+        'Someday': 'low',
+      };
+
+      // Build update data
+      const updateData: any = {};
+
+      if (validatedData.title !== undefined) {
+        updateData.title = validatedData.title;
+      }
+
+      if (validatedData.status !== undefined) {
+        updateData.status = statusMap[validatedData.status] || validatedData.status.toLowerCase();
+        // Set completedAt when marking as done
+        if (updateData.status === 'done') {
+          updateData.completedAt = new Date();
+        }
+      }
+
+      if (validatedData.priority !== undefined) {
+        updateData.priority = priorityMap[validatedData.priority] || 'medium';
+      }
+
+      if (validatedData.dueDate !== undefined) {
+        updateData.dueDate = validatedData.dueDate ? new Date(validatedData.dueDate) : null;
+      }
+
+      // Update task
+      const task = await prisma.task.update({
+        where: { id },
+        data: updateData,
+      });
+
+      // Handle context as tags
+      if (validatedData.context !== undefined) {
+        for (const contextValue of validatedData.context) {
+          const tag = await prisma.tag.upsert({
+            where: { name: `context:${contextValue}` },
+            update: {},
+            create: { name: `context:${contextValue}` },
+          });
+
+          await prisma.taskTag.upsert({
+            where: {
+              taskId_tagId: {
+                taskId: task.id,
+                tagId: tag.id,
+              },
+            },
+            update: {},
+            create: {
+              taskId: task.id,
+              tagId: tag.id,
+            },
+          });
+        }
+      }
+
+      // Handle tags
+      if (validatedData.tags !== undefined) {
+        // Remove existing tags
+        await prisma.taskTag.deleteMany({
+          where: {
+            taskId: task.id,
+            tag: {
+              name: {
+                notIn: validatedData.context?.map(c => `context:${c}`) || []
+              }
+            }
+          },
+        });
+
+        // Add new tags
+        for (const tagName of validatedData.tags) {
+          const tag = await prisma.tag.upsert({
+            where: { name: tagName },
+            update: {},
+            create: { name: tagName },
+          });
+
+          await prisma.taskTag.upsert({
+            where: {
+              taskId_tagId: {
+                taskId: task.id,
+                tagId: tag.id,
+              },
+            },
+            update: {},
+            create: {
+              taskId: task.id,
+              tagId: tag.id,
+            },
+          });
+        }
+      }
+
+      console.log(`✅ Updated Postgres task: ${task.id}`);
+
+      return NextResponse.json({
+        success: true,
+        taskId: task.id,
+        message: "Task updated successfully",
+        updated: validatedData,
+        source: 'postgres',
+      });
+    }
+
+    // OLD: Notion implementation (fallback)
     if (!process.env.NOTION_API_KEY) {
       return NextResponse.json(
         { error: "NOTION_API_KEY is not configured" },
@@ -82,11 +205,14 @@ export async function PATCH(
       properties,
     });
 
+    console.log(`✅ Updated Notion task: ${response.id}`);
+
     return NextResponse.json({
       success: true,
       pageId: response.id,
       message: "Task updated successfully",
       updated: validatedData,
+      source: 'notion',
     });
   } catch (error) {
     console.error("Error updating task:", error);

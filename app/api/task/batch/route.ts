@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
 import { Client } from '@notionhq/client';
+import { prisma } from '@/lib/prisma';
 
 const NOTION_DATABASE_ID = '739144099ebc4ba1ba619dd1a5a08d25';
+const USE_POSTGRES = process.env.USE_POSTGRES === 'true';
 
 /**
  * Natural Language Batch Import
@@ -225,6 +227,71 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
   return response.id;
 }
 
+async function createPostgresTask(parsedTask: ParsedTask, source: string): Promise<{ id: string; title: string }> {
+  // Map Notion priority to Prisma priority
+  const priorityMap: Record<string, string> = {
+    'Urgent': 'urgent',
+    'Important': 'high',
+    'Someday': 'low',
+  };
+  const priority = priorityMap[parsedTask.priority] || 'medium';
+
+  // Build description from subtasks, tags, and mentions
+  const descriptionParts: string[] = [];
+
+  if (parsedTask.subtasks.length > 0) {
+    descriptionParts.push('Subtasks:\n' + parsedTask.subtasks.map((st) => `- ${st}`).join('\n'));
+  }
+
+  if (parsedTask.tags.length > 0) {
+    descriptionParts.push('\nTags: ' + parsedTask.tags.map((t) => `#${t}`).join(', '));
+  }
+
+  if (parsedTask.mentions.length > 0) {
+    descriptionParts.push('\nMentions: ' + parsedTask.mentions.map((m) => `@${m}`).join(', '));
+  }
+
+  // Create metadata tags for Notion-specific fields
+  const metadataTags: string[] = [
+    `context:${parsedTask.context}`,
+    `energy:${parsedTask.energy}`,
+    `time:${parsedTask.time}`,
+    `source:${source}`,
+  ];
+
+  // Merge all tags
+  const allTags = [...new Set([...parsedTask.tags, ...metadataTags])];
+
+  // Create task in Postgres
+  const task = await prisma.task.create({
+    data: {
+      title: parsedTask.title,
+      description: descriptionParts.join('\n') || null,
+      status: 'todo',
+      priority,
+      dueDate: parsedTask.dueDate ? new Date(parsedTask.dueDate) : null,
+    },
+  });
+
+  // Create or connect tags
+  for (const tagName of allTags) {
+    const tag = await prisma.tag.upsert({
+      where: { name: tagName },
+      update: {},
+      create: { name: tagName },
+    });
+
+    await prisma.taskTag.create({
+      data: {
+        taskId: task.id,
+        tagId: tag.id,
+      },
+    });
+  }
+
+  return { id: task.id, title: task.title };
+}
+
 export async function POST(req: NextRequest) {
   try {
     console.log('[BATCH] Version: 2025-12-31-v2 - Starting batch import');
@@ -240,9 +307,9 @@ export async function POST(req: NextRequest) {
 
     const { tasks, source } = parsed.data;
 
-    if (!process.env.NOTION_API_KEY || !process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json(
-        { error: 'Missing API keys' },
+        { error: 'Missing ANTHROPIC_API_KEY' },
         { status: 500 }
       );
     }
@@ -259,7 +326,62 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create all tasks in Notion
+    // NEW: Postgres implementation
+    if (USE_POSTGRES) {
+      console.log('[BATCH] Creating tasks in Postgres...');
+      const createdTasks = await Promise.all(
+        parsedTasks.map(async (task, index) => {
+          console.log(`[BATCH] Creating task ${index + 1}/${parsedTasks.length}: ${task.title}`);
+          const result = await createPostgresTask(task, source);
+          console.log(`[BATCH] Created task ${index + 1} with ID: ${result.id}`);
+          return {
+            taskId: result.id,
+            title: result.title,
+            priority: task.priority,
+            dueDate: task.dueDate,
+          };
+        })
+      );
+
+      // Send APNs push notification for batch import
+      console.log('[BATCH] Sending APNs notification...');
+      try {
+        const baseUrl = process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : 'https://tomos-task-api.vercel.app';
+
+        await fetch(`${baseUrl}/api/send-push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `${createdTasks.length} Tasks Captured`,
+            body: createdTasks.map((t) => t.title).join(', '),
+            badge: createdTasks.length,
+          }),
+        });
+      } catch (error) {
+        console.error('[BATCH] Failed to send push notification:', error);
+      }
+
+      console.log(`[BATCH] Batch import: Created ${createdTasks.length} tasks in Postgres`);
+
+      return NextResponse.json({
+        success: true,
+        taskCount: createdTasks.length,
+        tasks: createdTasks,
+        message: `Successfully created ${createdTasks.length} tasks from batch input`,
+        source: 'postgres',
+      });
+    }
+
+    // OLD: Notion implementation (fallback)
+    if (!process.env.NOTION_API_KEY) {
+      return NextResponse.json(
+        { error: 'NOTION_API_KEY is not configured' },
+        { status: 500 }
+      );
+    }
+
     console.log('[BATCH] Creating tasks in Notion...');
     const createdTasks = await Promise.all(
       parsedTasks.map(async (task, index) => {
@@ -295,13 +417,14 @@ export async function POST(req: NextRequest) {
       console.error('[BATCH] Failed to send push notification:', error);
     }
 
-    console.log(`Batch import: Created ${createdTasks.length} tasks`);
+    console.log(`[BATCH] Batch import: Created ${createdTasks.length} tasks in Notion`);
 
     return NextResponse.json({
       success: true,
       taskCount: createdTasks.length,
       tasks: createdTasks,
       message: `Successfully created ${createdTasks.length} tasks from batch input`,
+      source: 'notion',
     });
   } catch (error) {
     console.error('Error processing batch tasks:', error);
