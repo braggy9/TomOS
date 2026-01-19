@@ -36,7 +36,7 @@ export async function GET() {
         take: 100,
       });
 
-      const formattedTasks = tasks.map(task => ({
+      const formattedTasks = tasks.map((task: any) => ({
         id: task.id,
         title: task.title,
         description: task.description,
@@ -45,7 +45,7 @@ export async function GET() {
         dueDate: task.dueDate?.toISOString() || null,
         completedAt: task.completedAt?.toISOString() || null,
         project: task.project,
-        tags: task.tags.map(tt => tt.tag),
+        tags: task.tags.map((tt: any) => tt.tag),
         createdAt: task.createdAt.toISOString(),
         updatedAt: task.updatedAt.toISOString(),
       }));

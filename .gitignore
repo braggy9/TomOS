@@ -36,3 +36,13 @@ next-env.d.ts
 # claude code
 CLAUDE.local.md
 .env.local
+
+# migration data (contains sensitive info)
+notion-export.json
+id-mappings.json
+test-connection.mjs
+test-db-connection.ts
+apply-migration.mjs
+generate-client.mjs
+setup-postgres.sh
+complete-phase-0.sh

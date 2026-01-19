@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "storybook": "storybook dev -p 6006",
@@ -14,7 +14,8 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "db:seed": "node prisma/seed.mjs",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "test": "vitest run --reporter dot"
+    "test": "vitest run --reporter dot",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
