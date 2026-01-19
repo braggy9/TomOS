@@ -39,17 +39,20 @@ model Task {
   dueDate     DateTime?
   completedAt DateTime?
   projectId   String?
+  matterId    String?   // Link to MatterOS matter
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   // Relations
   project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  matter  Matter?   @relation(fields: [matterId], references: [id], onDelete: SetNull)
   tags    TaskTag[]
 
   @@map("tasks")
   @@index([status])
   @@index([priority])
   @@index([projectId])
+  @@index([matterId])
   @@index([dueDate])
 }
 
@@ -81,4 +84,141 @@ model TaskTag {
 
   @@id([taskId, tagId])
   @@map("task_tags")
+}
+
+// ============================================
+// MATTEROS - Legal Matter Management
+// ============================================
+
+// MATTERS
+model Matter {
+  id             String   @id @default(uuid())
+
+  // Basic Info
+  title          String
+  description    String?  @db.Text
+  client         String   // Client name (later: relation to Client table)
+  matterNumber   String?  @unique // e.g., "PUB-2026-001"
+  type           String   // contract, dispute, compliance, advisory, employment, ip, regulatory
+  status         String   @default("active") // active, on_hold, completed, archived
+  priority       String   @default("medium") // low, medium, high, urgent
+
+  // Dates
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  dueDate        DateTime?
+  completedAt    DateTime?
+  lastActivityAt DateTime @default(now())
+
+  // Financial
+  budget         Decimal? @db.Decimal(12, 2)
+  actualSpend    Decimal? @db.Decimal(12, 2)
+  billingStatus  String?  // billable, non_billable, fixed_fee, time_and_materials
+
+  // People
+  clientContact   String?
+  leadCounsel     String?  // Internal lead lawyer
+  teamMembers     String[] // Array of team member names
+  externalCounsel String[] // External law firms
+
+  // Organization
+  practiceArea   String?  // Commercial, IP, Employment, Regulatory, etc.
+  jurisdiction   String?  // NSW, VIC, Commonwealth, International
+  tags           String[]
+
+  // Relations
+  tasks          Task[]
+  documents      MatterDocument[]
+  events         MatterEvent[]
+  notes          MatterNote[]
+
+  @@map("matters")
+  @@index([status])
+  @@index([priority])
+  @@index([client])
+  @@index([type])
+  @@index([dueDate])
+  @@index([lastActivityAt])
+}
+
+// MATTER DOCUMENTS
+model MatterDocument {
+  id          String   @id @default(uuid())
+  matterId    String
+
+  title       String
+  type        String   // contract, email, memo, correspondence, court_filing, research
+  description String?  @db.Text
+
+  // Storage
+  fileUrl     String?  // SharePoint, Google Drive, etc.
+  localPath   String?  // Local file path
+
+  // Metadata
+  version     String?  // v1.0, v2.0, etc.
+  status      String?  // draft, final, executed, superseded
+  author      String?
+  reviewedBy  String?
+
+  // Dates
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  signedAt    DateTime?
+  expiresAt   DateTime?
+
+  // Relations
+  matter      Matter   @relation(fields: [matterId], references: [id], onDelete: Cascade)
+
+  @@map("matter_documents")
+  @@index([matterId])
+  @@index([type])
+  @@index([status])
+}
+
+// MATTER EVENTS (Timeline/Activity Log)
+model MatterEvent {
+  id          String   @id @default(uuid())
+  matterId    String
+
+  type        String   // status_change, document_added, task_completed, note_added, meeting, deadline
+  title       String
+  description String?  @db.Text
+
+  // Metadata
+  actor       String?  // Who performed the action
+  metadata    Json?    // Additional structured data
+
+  createdAt   DateTime @default(now())
+
+  // Relations
+  matter      Matter   @relation(fields: [matterId], references: [id], onDelete: Cascade)
+
+  @@map("matter_events")
+  @@index([matterId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// MATTER NOTES
+model MatterNote {
+  id        String   @id @default(uuid())
+  matterId  String
+
+  title     String?
+  content   String   @db.Text // Markdown or rich text
+  type      String   @default("general") // general, decision, analysis, research, meeting_notes
+
+  // Metadata
+  author    String?
+  tags      String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  matter    Matter   @relation(fields: [matterId], references: [id], onDelete: Cascade)
+
+  @@map("matter_notes")
+  @@index([matterId])
+  @@index([type])
 }

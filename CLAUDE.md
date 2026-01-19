@@ -42,7 +42,112 @@ Next.js serverless API providing task management, APNs push notifications, and A
 
 ---
 
-## Current Status (Updated 2026-01-07)
+## MatterOS Integration
+
+**Status:** ✅ **INTEGRATED** (January 19, 2026)
+**Documentation:** `/Users/tombragg/Desktop/tomos-command-tower/projects/matteros/`
+**Architecture:** Integrated module within TomOS API (shared PostgreSQL database)
+
+### What is MatterOS?
+
+Legal matter management system built as an integrated module within TomOS. Enables lawyers to track matters, documents, events, notes, and link them to TomOS tasks for unified productivity.
+
+### Database Schema
+
+**New Tables (January 19, 2026):**
+- `matters` - Core legal matter entity (client, type, status, priority, billing, team)
+- `matter_documents` - Document repository (contracts, memos, court filings, research)
+- `matter_events` - Activity timeline (status changes, deadlines, meetings)
+- `matter_notes` - Research notes and analysis (markdown support)
+
+**Task Integration:**
+- Added `matterId` field to `tasks` table
+- Foreign key: `tasks.matterId` → `matters.id` (optional, ON DELETE SET NULL)
+- Enables linking TomOS tasks to legal matters for unified tracking
+
+### API Endpoints
+
+All endpoints follow REST conventions with JSON responses.
+
+**Matters:**
+```
+GET    /api/matters                    # List matters (filter by status, priority, client, type)
+POST   /api/matters                    # Create new matter
+GET    /api/matters/[id]               # Get single matter with related data
+PATCH  /api/matters/[id]               # Update matter
+DELETE /api/matters/[id]               # Archive matter (soft delete)
+```
+
+**Documents:**
+```
+GET    /api/matters/[id]/documents           # List documents for matter
+POST   /api/matters/[id]/documents           # Add document to matter
+GET    /api/matters/[id]/documents/[docId]   # Get single document
+PATCH  /api/matters/[id]/documents/[docId]   # Update document
+DELETE /api/matters/[id]/documents/[docId]   # Delete document
+```
+
+**Events (Activity Timeline):**
+```
+GET    /api/matters/[id]/events        # List events for matter
+POST   /api/matters/[id]/events        # Create custom event
+```
+
+**Notes:**
+```
+GET    /api/matters/[id]/notes         # List notes for matter
+POST   /api/matters/[id]/notes         # Create note
+GET    /api/matters/[id]/notes/[noteId]  # Get single note
+PATCH  /api/matters/[id]/notes/[noteId]  # Update note
+DELETE /api/matters/[id]/notes/[noteId]  # Delete note
+```
+
+### Features
+
+- **Activity Tracking:** Every change updates `matter.lastActivityAt` for sorting
+- **Automatic Events:** Status changes, document additions, and note creations auto-create timeline events
+- **Soft Deletes:** Matters are archived (not deleted) to preserve history
+- **Pagination:** All list endpoints support limit/offset with hasMore flag
+- **Type Safety:** Full TypeScript types in `/types/matteros.ts`
+- **Fire-and-forget:** Background operations (events, activity updates) don't block primary API responses
+
+### Matter Types
+
+- `contract` - Contract review and negotiation
+- `dispute` - Disputes and litigation
+- `compliance` - Compliance matters
+- `advisory` - Legal advisory services
+- `employment` - Employment law
+- `ip` - Intellectual property
+- `regulatory` - Regulatory matters
+
+### Integration with TomOS Tasks
+
+Link tasks to matters by setting `matterId`:
+```typescript
+// Create task linked to matter
+POST /api/task
+{
+  "task": "Review employment contract by Friday",
+  "matterId": "uuid-of-matter"
+}
+```
+
+Tasks appear in matter's task list when viewing via:
+```
+GET /api/matters/[id]  // Includes related tasks
+```
+
+### Next Steps
+
+- **Phase 2:** Client management (separate Client table)
+- **Phase 3:** Time tracking (TimeEntry table)
+- **Phase 4:** iOS/macOS client integration
+- **Phase 5:** LegalOS connection (advanced legal automation)
+
+---
+
+## Current Status (Updated 2026-01-19)
 
 ### Completed
 - iOS push notifications working (device registered)
@@ -79,6 +184,11 @@ TomOS/
 │   ├── task/                # Single task creation + auto-push
 │   │   └── batch/           # Batch task import
 │   ├── tasks/               # Task management
+│   ├── matters/             # MatterOS - Legal matter management ⚡ NEW
+│   │   └── [id]/
+│   │       ├── documents/   # Matter documents
+│   │       ├── events/      # Matter activity timeline
+│   │       └── notes/       # Matter notes and research
 │   ├── calendar/            # Google Calendar sync
 │   ├── email/               # Email-to-task processing
 │   ├── focus/               # Focus mode state
@@ -86,8 +196,14 @@ TomOS/
 │   ├── suggestions/         # AI task suggestions
 │   ├── health/              # Health check
 │   └── cron/                # Scheduled jobs
+├── prisma/
+│   ├── schema.prisma        # Database schema (Tasks + MatterOS)
+│   └── migrations/          # Migration history
+├── types/
+│   └── matteros.ts          # MatterOS TypeScript types ⚡ NEW
 ├── docs/
-│   └── APNS_SETUP.md        # APNs implementation guide
+│   ├── APNS_SETUP.md        # APNs implementation guide
+│   └── postgres-migration/  # PostgreSQL migration docs
 ├── .github/workflows/       # GitHub Actions (cron jobs)
 ├── package.json
 ├── vercel.json
