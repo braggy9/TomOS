@@ -238,8 +238,17 @@ model Note {
   excerpt   String?  // Auto-generated from first 200 chars
 
   // Organization
-  tags      String[] // Can reuse existing tag system
-  isPinned  Boolean  @default(false)
+  tags         String[] // Can reuse existing tag system
+  isPinned     Boolean  @default(false)
+
+  // Enhanced Properties
+  priority     String?  @default("medium") // low, medium, high, urgent
+  status       String?  @default("active") // draft, active, archived
+  reviewDate   DateTime? // For notes that need periodic review
+  confidential Boolean  @default(false) // Flag for sensitive legal content
+
+  // Smart Linking (parsed mentions stored as JSON)
+  links        Json?    // {tasks: [], matters: [], projects: [], notes: []}
 
   // Optional Relations (link notes to tasks or matters)
   taskId    String?
@@ -261,4 +270,8 @@ model Note {
   @@index([taskId])
   @@index([matterId])
   @@index([projectId])
+  @@index([priority])
+  @@index([status])
+  @@index([reviewDate])
+  @@index([confidential])
 }

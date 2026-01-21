@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { processSmartLinks } from '@/lib/smartLinking';
 
 const prisma = new PrismaClient();
 
@@ -63,10 +64,17 @@ export async function PATCH(
       if (!body.excerpt) {
         data.excerpt = body.content.substring(0, 200).replace(/[#*`_\[\]]/g, '').trim();
       }
+      // Reprocess smart links when content changes
+      const { resolvedLinks } = await processSmartLinks(body.content);
+      data.links = resolvedLinks;
     }
     if (body.excerpt !== undefined) data.excerpt = body.excerpt;
     if (body.tags !== undefined) data.tags = body.tags;
     if (body.isPinned !== undefined) data.isPinned = body.isPinned;
+    if (body.priority !== undefined) data.priority = body.priority;
+    if (body.status !== undefined) data.status = body.status;
+    if (body.reviewDate !== undefined) data.reviewDate = body.reviewDate ? new Date(body.reviewDate) : null;
+    if (body.confidential !== undefined) data.confidential = body.confidential;
     if (body.taskId !== undefined) data.taskId = body.taskId || null;
     if (body.matterId !== undefined) data.matterId = body.matterId || null;
     if (body.projectId !== undefined) data.projectId = body.projectId || null;

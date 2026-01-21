@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { processSmartLinks } from '@/lib/smartLinking';
 
 const prisma = new PrismaClient();
 
@@ -96,6 +97,9 @@ export async function POST(request: NextRequest) {
     // Generate excerpt if not provided (first 200 chars of content)
     const excerpt = body.excerpt || body.content.substring(0, 200).replace(/[#*`_\[\]]/g, '').trim();
 
+    // Process smart links in content
+    const { resolvedLinks } = await processSmartLinks(body.content);
+
     // Create note
     const note = await prisma.note.create({
       data: {
@@ -104,6 +108,11 @@ export async function POST(request: NextRequest) {
         excerpt,
         tags: body.tags || [],
         isPinned: body.isPinned || false,
+        priority: body.priority || 'medium',
+        status: body.status || 'active',
+        reviewDate: body.reviewDate ? new Date(body.reviewDate) : null,
+        confidential: body.confidential || false,
+        links: resolvedLinks as any, // Store resolved links
         taskId: body.taskId || null,
         matterId: body.matterId || null,
         projectId: body.projectId || null
