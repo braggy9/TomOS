@@ -147,11 +147,101 @@ GET /api/matters/[id]  // Includes related tasks
 
 ---
 
-## Current Status (Updated 2026-01-19)
+## Notes Feature
+
+**Status:** ✅ **INTEGRATED** (January 21, 2026)
+**Architecture:** General-purpose note-taking with full TomOS ecosystem integration
+
+### What is the Notes Feature?
+
+General-purpose note-taking system built into TomOS. Unlike MatterNotes (which are specific to legal matters), Notes are standalone with optional linking to Tasks, Matters, and Projects for unified knowledge management.
+
+### Database Schema
+
+**New Table (January 21, 2026):**
+- `notes` - General notes with Markdown support
+
+**Fields:**
+- Core: title, content (Markdown), auto-generated excerpt
+- Organization: tags array, isPinned boolean
+- Optional Links: taskId, matterId, projectId (all nullable, ON DELETE SET NULL)
+- Timestamps: createdAt, updatedAt
+
+**Indexes:** isPinned, createdAt, taskId, matterId, projectId
+
+### API Endpoints
+
+All endpoints follow REST conventions with JSON responses.
+
+**Notes CRUD:**
+```
+GET    /api/notes                # List notes (filter by pinned, tags, links)
+POST   /api/notes                # Create new note
+GET    /api/notes/[id]           # Get single note with relations
+PATCH  /api/notes/[id]           # Update note
+DELETE /api/notes/[id]           # Delete note
+GET    /api/notes/search?q=text  # Full-text search across title/content
+```
+
+### Features
+
+- **Markdown Support:** Full markdown formatting in content field
+- **Auto Excerpts:** First 200 chars auto-extracted for previews (markdown stripped)
+- **Tag Organization:** Reuses existing tag system (string array)
+- **Pin Important Notes:** Boolean flag for sticky notes
+- **Optional Linking:** Connect notes to tasks, matters, or projects
+- **Full-Text Search:** Case-insensitive search across title, content, and excerpt
+- **Pagination:** Limit/offset support with hasMore flag
+
+### Example Usage
+
+**Create Note:**
+```bash
+curl -X POST https://tomos-task-api.vercel.app/api/notes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Meeting Notes - 2026-01-21",
+    "content": "# Discussion Points\n\n- Project timeline\n- Budget approval",
+    "tags": ["meeting", "work"],
+    "isPinned": true,
+    "projectId": "uuid-of-project"
+  }'
+```
+
+**List Pinned Notes:**
+```bash
+curl https://tomos-task-api.vercel.app/api/notes?pinned=true
+```
+
+**Search Notes:**
+```bash
+curl "https://tomos-task-api.vercel.app/api/notes/search?q=budget&tags=work"
+```
+
+### Integration with TomOS Ecosystem
+
+Link notes to other entities:
+- **Tasks:** Link research notes, implementation details, or decision rationale
+- **Matters:** Link general notes (separate from formal MatterNotes for court docs)
+- **Projects:** Link brainstorming, meeting notes, or project documentation
+
+All relations are optional and use soft deletes (SetNull) to preserve notes when linked entities are removed.
+
+### Next Steps
+
+- **Phase 2:** iOS/macOS client integration (NotesListView, NoteDetailView)
+- **Phase 3:** Rich text editor with syntax highlighting
+- **Phase 4:** Note attachments and file uploads
+- **Phase 5:** Bidirectional linking between notes
+
+---
+
+## Current Status (Updated 2026-01-21)
 
 ### Completed
 - iOS push notifications working (device registered)
 - macOS push notifications working (device registered)
+- **General Notes feature** - Full CRUD API with search and ecosystem integration
 - ntfy fully deprecated and removed - all notifications via APNs
 - NLP task capture with smart date parsing (Sydney timezone)
 - 15-minute reminder notifications via APNs
