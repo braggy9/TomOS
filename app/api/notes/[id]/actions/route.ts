@@ -74,7 +74,7 @@ async function duplicateNote(noteId: string) {
       priority: original.priority,
       status: 'draft', // New copy starts as draft
       confidential: original.confidential,
-      links: original.links,
+      links: original.links as any, // Type assertion for JSON field
       // Don't copy relations
       taskId: null,
       matterId: null,
