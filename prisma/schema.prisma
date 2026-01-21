@@ -23,6 +23,7 @@ model Project {
 
   // Relations
   tasks Task[]
+  notes Note[]
 
   @@map("projects")
 }
@@ -47,6 +48,7 @@ model Task {
   project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   matter  Matter?   @relation(fields: [matterId], references: [id], onDelete: SetNull)
   tags    TaskTag[]
+  notes   Note[]
 
   @@map("tasks")
   @@index([status])
@@ -130,7 +132,8 @@ model Matter {
   tasks          Task[]
   documents      MatterDocument[]
   events         MatterEvent[]
-  notes          MatterNote[]
+  matterNotes    MatterNote[]      @relation("MatterNotes")
+  notes          Note[]
 
   @@map("matters")
   @@index([status])
@@ -216,9 +219,46 @@ model MatterNote {
   updatedAt DateTime @updatedAt
 
   // Relations
-  matter    Matter   @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  matter    Matter   @relation("MatterNotes", fields: [matterId], references: [id], onDelete: Cascade)
 
   @@map("matter_notes")
   @@index([matterId])
   @@index([type])
+}
+
+// ============================================
+// GENERAL NOTES - Standalone note-taking
+// ============================================
+model Note {
+  id        String   @id @default(uuid())
+
+  // Content
+  title     String
+  content   String   @db.Text // Markdown supported
+  excerpt   String?  // Auto-generated from first 200 chars
+
+  // Organization
+  tags      String[] // Can reuse existing tag system
+  isPinned  Boolean  @default(false)
+
+  // Optional Relations (link notes to tasks or matters)
+  taskId    String?
+  matterId  String?
+  projectId String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  matter    Matter?  @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("notes")
+  @@index([isPinned])
+  @@index([createdAt])
+  @@index([taskId])
+  @@index([matterId])
+  @@index([projectId])
 }
