@@ -149,90 +149,311 @@ GET /api/matters/[id]  // Includes related tasks
 
 ## Notes Feature
 
-**Status:** ✅ **INTEGRATED** (January 21, 2026)
-**Architecture:** General-purpose note-taking with full TomOS ecosystem integration
+**Status:** ✅ **PHASE 1 COMPLETE** (January 21, 2026)
+**Architecture:** Professional note-taking with smart linking, templates, and full-text search
 
 ### What is the Notes Feature?
 
-General-purpose note-taking system built into TomOS. Unlike MatterNotes (which are specific to legal matters), Notes are standalone with optional linking to Tasks, Matters, and Projects for unified knowledge management.
+Professional note-taking system built into TomOS with advanced features for legal ADHD workflows. Unlike MatterNotes (which are specific to legal matters), Notes are standalone with smart linking to Tasks, Matters, Projects, and other Notes for unified knowledge management.
 
 ### Database Schema
 
-**New Table (January 21, 2026):**
-- `notes` - General notes with Markdown support
+**Table:** `notes` - Enhanced professional note-taking
 
 **Fields:**
-- Core: title, content (Markdown), auto-generated excerpt
-- Organization: tags array, isPinned boolean
-- Optional Links: taskId, matterId, projectId (all nullable, ON DELETE SET NULL)
-- Timestamps: createdAt, updatedAt
+- **Core:** title, content (Markdown), auto-generated excerpt
+- **Organization:** tags array, isPinned boolean
+- **Properties:** priority (low/medium/high/urgent), status (draft/active/archived)
+- **Legal Features:** reviewDate (for periodic review), confidential boolean flag
+- **Smart Linking:** links JSON (resolved references to tasks/matters/projects/notes)
+- **Relations:** taskId, matterId, projectId (all optional, ON DELETE SET NULL)
+- **Timestamps:** createdAt, updatedAt
 
-**Indexes:** isPinned, createdAt, taskId, matterId, projectId
+**Indexes:** isPinned, priority, status, reviewDate, confidential, full-text search (GIN)
 
-### API Endpoints
+### Phase 1 Features (✅ Complete)
 
-All endpoints follow REST conventions with JSON responses.
+#### 1. **Note Templates** (8 Professional Templates)
 
-**Notes CRUD:**
+Pre-filled structures for common legal workflows organized by category:
+
+**Legal Templates:**
+- Legal Research (legislation, case law, analysis)
+- Case Notes (facts, issues, decisions, next steps)
+- Client Brief (matter details, key points, timeline)
+- Contract Review (parties, terms, issues, recommendations)
+- Matter Strategy (objectives, risks, action plan)
+
+**Work/Personal Templates:**
+- Meeting Notes (attendees, agenda, decisions, actions)
+- Daily Log (daily reflection and tasks)
+- Quick Capture (rapid note-taking)
+
+**API Endpoints:**
 ```
-GET    /api/notes                # List notes (filter by pinned, tags, links)
-POST   /api/notes                # Create new note
-GET    /api/notes/[id]           # Get single note with relations
-PATCH  /api/notes/[id]           # Update note
-DELETE /api/notes/[id]           # Delete note
-GET    /api/notes/search?q=text  # Full-text search across title/content
+GET  /api/notes/templates           # List all templates by category
+POST /api/notes/templates?id={id}   # Create note from template
 ```
 
-### Features
+**Example:**
+```bash
+# List all templates
+curl https://tomos-task-api.vercel.app/api/notes/templates
 
-- **Markdown Support:** Full markdown formatting in content field
-- **Auto Excerpts:** First 200 chars auto-extracted for previews (markdown stripped)
-- **Tag Organization:** Reuses existing tag system (string array)
-- **Pin Important Notes:** Boolean flag for sticky notes
-- **Optional Linking:** Connect notes to tasks, matters, or projects
-- **Full-Text Search:** Case-insensitive search across title, content, and excerpt
-- **Pagination:** Limit/offset support with hasMore flag
+# Create from template
+curl -X POST "https://tomos-task-api.vercel.app/api/notes/templates?id=legal-research" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Employment Law Research"}'
+```
 
-### Example Usage
+#### 2. **Smart Linking** (Auto-Detection & Resolution)
 
-**Create Note:**
+Automatically parse and resolve entity mentions in note content:
+
+**Syntax:**
+- `@task-name` or `@"task with spaces"` → Links to tasks
+- `#matter-123` or `#PUB-2026-001` → Links to matters
+- `&project-name` or `&"project name"` → Links to projects
+- `[[note-title]]` → Wiki-style links to other notes
+
+**Features:**
+- Automatic parsing on create/update
+- Batch database resolution
+- Stored in `links` JSON field for fast retrieval
+- Case-insensitive title matching
+
+**Implementation:** `/lib/smartLinking.ts`
+
+**Example:**
 ```bash
 curl -X POST https://tomos-task-api.vercel.app/api/notes \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Meeting Notes - 2026-01-21",
-    "content": "# Discussion Points\n\n- Project timeline\n- Budget approval",
-    "tags": ["meeting", "work"],
-    "isPinned": true,
-    "projectId": "uuid-of-project"
+    "title": "Research Summary",
+    "content": "Analysis for #PUB-2026-001 linked to @Review task. See [[Case Notes]] for precedent."
+  }'
+
+# Response includes resolved links:
+{
+  "links": {
+    "tasks": [{"id": "...", "title": "Review"}],
+    "matters": [{"id": "...", "title": "...", "matterNumber": "PUB-2026-001"}],
+    "notes": [{"id": "...", "title": "Case Notes"}]
+  }
+}
+```
+
+#### 3. **Backlinks** (Reverse Reference Tracking)
+
+Find all notes that link to a specific note:
+
+**API Endpoint:**
+```
+GET /api/notes/[id]/backlinks
+```
+
+**Features:**
+- Searches both links JSON and content
+- Returns context snippets (100 chars before/after mention)
+- Ordered by most recent update
+
+**Example:**
+```bash
+curl https://tomos-task-api.vercel.app/api/notes/{noteId}/backlinks
+
+# Response:
+{
+  "data": {
+    "noteId": "...",
+    "backlinks": [
+      {
+        "id": "...",
+        "title": "Research Summary",
+        "linkContext": "...See [[Case Notes]] for precedent...",
+        "updatedAt": "2026-01-21T..."
+      }
+    ],
+    "count": 1
+  }
+}
+```
+
+#### 4. **PostgreSQL Full-Text Search** (with Relevance Ranking)
+
+High-performance search using PostgreSQL's native full-text capabilities:
+
+**Features:**
+- GIN index on combined title + content
+- `to_tsvector` + `plainto_tsquery` for natural language search
+- `ts_rank` for relevance scoring
+- Tag filtering support
+- 10-100x faster than basic LIKE queries
+
+**API Endpoint:**
+```
+GET /api/notes/search?q={query}&tags={tag1,tag2}&limit={n}&offset={n}
+```
+
+**Example:**
+```bash
+# Search with ranking
+curl "https://tomos-task-api.vercel.app/api/notes/search?q=employment contract"
+
+# Search with tag filter
+curl "https://tomos-task-api.vercel.app/api/notes/search?q=legal&tags=research,contracts"
+```
+
+#### 5. **Note Properties** (Priority, Status, Review)
+
+Enhanced metadata for professional workflows:
+
+**Properties:**
+- `priority`: low, medium, high, urgent (default: medium)
+- `status`: draft, active, archived (default: active)
+- `reviewDate`: DateTime for periodic review (legal research tracking)
+- `confidential`: Boolean flag for sensitive attorney-client content
+
+**Example:**
+```bash
+curl -X POST https://tomos-task-api.vercel.app/api/notes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Privileged Analysis",
+    "content": "Attorney-client privileged research",
+    "priority": "urgent",
+    "confidential": true,
+    "reviewDate": "2026-03-21"
   }'
 ```
 
-**List Pinned Notes:**
-```bash
-curl https://tomos-task-api.vercel.app/api/notes?pinned=true
+#### 6. **Note Actions** (Quick Workflows)
+
+Server-side operations for efficient note management:
+
+**API Endpoint:**
+```
+POST /api/notes/[id]/actions
 ```
 
-**Search Notes:**
+**Actions:**
+
+**`duplicate`** - Copy note
 ```bash
-curl "https://tomos-task-api.vercel.app/api/notes/search?q=budget&tags=work"
+curl -X POST https://tomos-task-api.vercel.app/api/notes/{id}/actions \
+  -H "Content-Type: application/json" \
+  -d '{"action": "duplicate"}'
+
+# Creates copy with:
+# - Title: "{original} (Copy)"
+# - Status: draft
+# - isPinned: false
+# - Relations cleared
+```
+
+**`archive`** - Archive note
+```bash
+curl -X POST https://tomos-task-api.vercel.app/api/notes/{id}/actions \
+  -H "Content-Type: application/json" \
+  -d '{"action": "archive"}'
+
+# Sets:
+# - status: "archived"
+# - isPinned: false
+```
+
+**`unarchive`** - Restore note
+```bash
+curl -X POST https://tomos-task-api.vercel.app/api/notes/{id}/actions \
+  -H "Content-Type: application/json" \
+  -d '{"action": "unarchive"}'
+```
+
+**`convert-to-task`** - Create task from note
+```bash
+curl -X POST https://tomos-task-api.vercel.app/api/notes/{id}/actions \
+  -H "Content-Type: application/json" \
+  -d '{"action": "convert-to-task"}'
+
+# Creates task with:
+# - title: note.title
+# - description: note.content
+# - priority: mapped from note.priority
+# - Linked to note via taskId
+# - Archives original note
+```
+
+**`set-review-date`** - Schedule review
+```bash
+curl -X POST https://tomos-task-api.vercel.app/api/notes/{id}/actions \
+  -H "Content-Type: application/json" \
+  -d '{"action": "set-review-date", "days": 60}'
+
+# Sets reviewDate to 60 days from now
+```
+
+### API Endpoints (Complete List)
+
+**Notes CRUD:**
+```
+GET    /api/notes                          # List notes (filter by pinned, tags, links, status, priority)
+POST   /api/notes                          # Create note (auto-processes smart links)
+GET    /api/notes/[id]                     # Get single note with relations
+PATCH  /api/notes/[id]                     # Update note (reprocesses smart links if content changed)
+DELETE /api/notes/[id]                     # Delete note
+```
+
+**Templates:**
+```
+GET    /api/notes/templates                # List templates by category
+POST   /api/notes/templates?id={templateId}  # Create note from template
+```
+
+**Search & Discovery:**
+```
+GET    /api/notes/search?q={query}&tags={tags}&limit={n}&offset={n}  # Full-text search
+GET    /api/notes/[id]/backlinks           # Find notes linking to this note
+```
+
+**Actions:**
+```
+POST   /api/notes/[id]/actions             # Perform action (duplicate, archive, convert-to-task, etc.)
 ```
 
 ### Integration with TomOS Ecosystem
 
-Link notes to other entities:
-- **Tasks:** Link research notes, implementation details, or decision rationale
-- **Matters:** Link general notes (separate from formal MatterNotes for court docs)
-- **Projects:** Link brainstorming, meeting notes, or project documentation
+**Smart linking enables:**
+- Notes referencing tasks: `@task-name`
+- Notes referencing matters: `#matter-number`
+- Notes referencing projects: `&project-name`
+- Notes referencing other notes: `[[note-title]]`
 
-All relations are optional and use soft deletes (SetNull) to preserve notes when linked entities are removed.
+**Use cases:**
+- **Tasks:** Implementation notes, decision rationale, research backing
+- **Matters:** General notes (separate from formal MatterNotes for court filings)
+- **Projects:** Brainstorming, meeting notes, project documentation
+- **Notes:** Wiki-style knowledge graph with bidirectional linking
+
+All relations use soft deletes (SetNull) to preserve notes when linked entities are removed.
 
 ### Next Steps
 
-- **Phase 2:** iOS/macOS client integration (NotesListView, NoteDetailView)
-- **Phase 3:** Rich text editor with syntax highlighting
-- **Phase 4:** Note attachments and file uploads
-- **Phase 5:** Bidirectional linking between notes
+**Phase 2: Client Integration**
+- iOS/macOS NotesListView with search and filters
+- NoteDetailView with Markdown rendering
+- Template selector UI
+- Backlinks panel
+
+**Phase 3: Advanced Features**
+- Rich text editor with syntax highlighting
+- Note attachments and file uploads
+- Note versioning and history
+- Collaborative editing
+
+**Phase 4: AI Features**
+- AI-powered note summarization
+- Automatic tagging suggestions
+- Similar notes discovery
+- Smart templates based on content
 
 ---
 
