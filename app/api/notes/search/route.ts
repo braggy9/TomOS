@@ -21,16 +21,27 @@ export async function GET(request: NextRequest) {
     }
 
     // Use PostgreSQL full-text search for better performance and ranking
+    // Build WHERE clause
+    const tagFilter = tags && tags.length > 0
+      ? `AND tags && ARRAY[${tags.map(t => `'${t.replace(/'/g, "''")}'`).join(',')}]::text[]`
+      : '';
+
     // First, get note IDs that match the search using raw SQL
-    const searchResults = await prisma.$queryRaw<Array<{ id: string; rank: number }>>`
-      SELECT id, ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', ${query})) as rank
+    const searchQuery = `
+      SELECT id, ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', $1)) as rank
       FROM notes
-      WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', ${query})
-      ${tags && tags.length > 0 ? prisma.$queryRaw`AND tags && ARRAY[${tags.join(',')}]::text[]` : prisma.$queryRaw``}
+      WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $1)
+      ${tagFilter}
       ORDER BY rank DESC, "updatedAt" DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
+      LIMIT $2 OFFSET $3
     `;
+
+    const searchResults = await prisma.$queryRawUnsafe<Array<{ id: string; rank: number }>>(
+      searchQuery,
+      query,
+      limit,
+      offset
+    );
 
     const noteIds = searchResults.map(r => r.id);
 
@@ -59,23 +70,28 @@ export async function GET(request: NextRequest) {
     const notes = noteIds.map(id => notesMap.get(id)).filter(Boolean);
 
     // Get total count
-    const [{ count: total }] = await prisma.$queryRaw<Array<{ count: bigint }>>`
+    const countQuery = `
       SELECT COUNT(*)::int as count
       FROM notes
-      WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', ${query})
-      ${tags && tags.length > 0 ? prisma.$queryRaw`AND tags && ARRAY[${tags.join(',')}]::text[]` : prisma.$queryRaw``}
+      WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $1)
+      ${tagFilter}
     `;
+
+    const [{ count: total }] = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+      countQuery,
+      query
+    );
 
 
     return NextResponse.json({
       success: true,
-      data: notes,
-      query,
-      pagination: {
+      data: {
+        notes,
+        query,
         total,
         limit,
         offset,
-        hasMore: offset + notes.length < total
+        hasMore: offset + notes.length < Number(total)
       }
     });
 
