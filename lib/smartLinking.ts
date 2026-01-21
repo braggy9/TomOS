@@ -11,7 +11,7 @@ export interface ParsedLink {
 
 export interface SmartLinks {
   tasks: Array<{ id: string; title: string }>;
-  matters: Array<{ id: string; title: string; matterNumber?: string }>;
+  matters: Array<{ id: string; title: string; matterNumber?: string | null }>;
   projects: Array<{ id: string; title: string }>;
   notes: Array<{ id: string; title: string }>;
 }
