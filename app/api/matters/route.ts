@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
               documents: true,
               events: true,
               notes: true,
+              tasks: true,
             },
           },
         },
