@@ -70,7 +70,7 @@ export async function suggestWeight(
     return { weight: lastWeight, rationale: reason }
   }
 
-  if (avgRPE < 7 && loadFactor !== 'high' && weekFactor === 'normal') {
+  if (avgRPE < 7 && weekFactor === 'normal') {
     return {
       weight: lastWeight + 2.5,
       rationale: `RPE low (${avgRPE.toFixed(1)}), running load manageable (${runningLoad}). Progress to ${lastWeight + 2.5}kg.`,
