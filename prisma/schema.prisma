@@ -45,10 +45,11 @@ model Task {
   updatedAt   DateTime  @updatedAt
 
   // Relations
-  project Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  matter  Matter?   @relation(fields: [matterId], references: [id], onDelete: SetNull)
-  tags    TaskTag[]
-  notes   Note[]
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  matter      Matter?       @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  tags        TaskTag[]
+  notes       Note[]
+  gymSessions GymSession[]
 
   @@map("tasks")
   @@index([status])
@@ -274,4 +275,123 @@ model Note {
   @@index([status])
   @@index([reviewDate])
   @@index([confidential])
+}
+
+// ============================================
+// FITNESSOS - Gym & Fitness Tracking
+// ============================================
+
+model GymSession {
+  id              String    @id @default(uuid())
+  date            DateTime  @default(now())
+  sessionType     String    // "A", "B", "C", or custom
+  duration        Int?      // minutes
+  notes           String?
+  overallRPE      Int?      // 1-10
+  weekType        String?   // "kid" or "non-kid"
+  completedAt     DateTime?
+
+  // Relations
+  taskId          String?
+  task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  sessionExercises SessionExercise[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("gym_sessions")
+  @@index([date])
+  @@index([sessionType])
+}
+
+model Exercise {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  category        String   // "power", "strength", "accessory", "core", "warmup", "conditioning"
+  equipment       String[] // ["barbell", "dumbbell", "kettlebell", "bodyweight"]
+  primaryMuscles  String[] // ["glutes", "hamstrings", "quads"]
+  movementPattern String?  // "hip_hinge", "squat", "push", "pull", "carry", "rotation"
+  cues            String?  // Coaching cues
+  spineNotes      String?  // L4/5, S1 considerations
+  videoUrl        String?
+
+  sessionExercises SessionExercise[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("exercises")
+  @@index([category])
+  @@index([movementPattern])
+}
+
+model SessionExercise {
+  id              String   @id @default(uuid())
+  order           Int      // Order within session
+
+  // Relations
+  sessionId       String
+  session         GymSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId      String
+  exercise        Exercise @relation(fields: [exerciseId], references: [id])
+
+  sets            ExerciseSet[]
+
+  createdAt       DateTime @default(now())
+
+  @@map("session_exercises")
+  @@index([sessionId])
+}
+
+model ExerciseSet {
+  id                String   @id @default(uuid())
+  setNumber         Int
+  weight            Float?   // kg
+  reps              Int?
+  time              Int?     // seconds (for holds/carries)
+  distance          Float?   // meters (for carries)
+  rpe               Int?     // 1-10
+  notes             String?
+
+  // Relations
+  sessionExerciseId String
+  sessionExercise   SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime @default(now())
+
+  @@map("exercise_sets")
+  @@index([sessionExerciseId])
+}
+
+model RunningSync {
+  id              String   @id @default(uuid())
+  externalId      String   @unique // Strava activity ID
+  source          String   @default("strava") // "strava", "garmin", "manual"
+  date            DateTime
+  type            String   // "easy", "intervals", "tempo", "hills", "long"
+  distance        Float    // km
+  duration        Int      // minutes
+  avgPace         Float?   // min/km
+  avgHeartRate    Int?
+  elevationGain   Float?   // meters
+  trainingLoad    Float?   // Calculated load score
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("running_sync")
+  @@index([date])
+  @@index([source])
+}
+
+model StravaToken {
+  id            String   @id @default("singleton")
+  accessToken   String
+  refreshToken  String
+  expiresAt     Int      // Unix timestamp
+  athleteId     Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("strava_tokens")
 }
