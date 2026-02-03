@@ -30,8 +30,8 @@ export async function getStravaAccessToken(): Promise<string | null> {
 export async function refreshStravaToken(
   refreshToken: string
 ): Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null> {
-  const clientId = process.env.STRAVA_CLIENT_ID
-  const clientSecret = process.env.STRAVA_CLIENT_SECRET
+  const clientId = process.env.STRAVA_CLIENT_ID?.trim()
+  const clientSecret = process.env.STRAVA_CLIENT_SECRET?.trim()
 
   if (!clientId || !clientSecret) {
     console.error('STRAVA_CLIENT_ID or STRAVA_CLIENT_SECRET not configured')

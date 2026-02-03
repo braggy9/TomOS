@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
     cookieStore.delete('strava_oauth_state')
 
     // Exchange code for tokens
-    const clientId = process.env.STRAVA_CLIENT_ID
-    const clientSecret = process.env.STRAVA_CLIENT_SECRET
+    const clientId = process.env.STRAVA_CLIENT_ID?.trim()
+    const clientSecret = process.env.STRAVA_CLIENT_SECRET?.trim()
 
     if (!clientId || !clientSecret) {
       return new NextResponse(

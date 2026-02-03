@@ -6,7 +6,7 @@ import { cookies } from 'next/headers'
  * Redirects to Strava OAuth authorization page
  */
 export async function GET(request: NextRequest) {
-  const clientId = process.env.STRAVA_CLIENT_ID
+  const clientId = process.env.STRAVA_CLIENT_ID?.trim()
   if (!clientId) {
     return NextResponse.json(
       { success: false, error: 'STRAVA_CLIENT_ID not configured' },
