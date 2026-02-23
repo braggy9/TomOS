@@ -395,3 +395,96 @@ model StravaToken {
 
   @@map("strava_tokens")
 }
+
+// ============================================
+// JOURNAL - Reflective journaling with AI companion
+// ============================================
+
+model JournalEntry {
+  id          String    @id @default(uuid())
+
+  // Content
+  content     String    @db.Text
+  title       String?   // Optional - auto-generated from first line if blank
+  excerpt     String?   // Auto-generated from first 200 chars
+  wordCount   Int       @default(0)
+
+  // Mood & Energy
+  mood        String?   // great, good, okay, low, rough
+  energy      String?   // high, medium, low
+
+  // AI Analysis
+  reflection  String?   @db.Text // AI-generated reflection on entry
+  themes      String[]  // Extracted themes (e.g., "work", "kids", "exercise")
+  tags        String[]  // User-applied tags
+
+  // Timestamps
+  entryDate   DateTime  @default(now()) // The date the entry is "about"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  conversations JournalConversation[]
+
+  @@map("journal_entries")
+  @@index([entryDate])
+  @@index([mood])
+  @@index([createdAt])
+}
+
+model JournalConversation {
+  id          String    @id @default(uuid())
+  entryId     String?   // Optional - can be standalone chat
+
+  // Metadata
+  title       String?   // Auto-generated summary
+  mode        String    @default("chat") // journal, chat, hybrid
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  entry       JournalEntry? @relation(fields: [entryId], references: [id], onDelete: SetNull)
+  messages    JournalMessage[]
+
+  @@map("journal_conversations")
+  @@index([entryId])
+  @@index([createdAt])
+}
+
+model JournalMessage {
+  id              String   @id @default(uuid())
+  conversationId  String
+
+  role            String   // user, assistant
+  content         String   @db.Text
+
+  createdAt       DateTime @default(now())
+
+  // Relations
+  conversation    JournalConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("journal_messages")
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model JournalSummary {
+  id          String   @id @default(uuid())
+  type        String   // weekly, monthly
+  periodStart DateTime
+  periodEnd   DateTime
+
+  // AI-generated content
+  content     String   @db.Text // The reflection/summary text
+  themes      String[] // Extracted themes for the period
+  moodPattern String?  // Description of mood trends
+  insights    Json?    // Structured pattern data
+
+  createdAt   DateTime @default(now())
+
+  @@map("journal_summaries")
+  @@index([type])
+  @@index([periodStart])
+}
