@@ -435,34 +435,108 @@ POST   /api/notes/[id]/actions             # Perform action (duplicate, archive,
 
 All relations use soft deletes (SetNull) to preserve notes when linked entities are removed.
 
-### Next Steps
+### Next Steps (Notes)
 
 **Phase 2: Client Integration**
 - iOS/macOS NotesListView with search and filters
 - NoteDetailView with Markdown rendering
-- Template selector UI
-- Backlinks panel
 
-**Phase 3: Advanced Features**
-- Rich text editor with syntax highlighting
-- Note attachments and file uploads
-- Note versioning and history
-- Collaborative editing
-
-**Phase 4: AI Features**
+**Phase 3: AI Features**
 - AI-powered note summarization
 - Automatic tagging suggestions
-- Similar notes discovery
-- Smart templates based on content
 
 ---
 
-## Current Status (Updated 2026-01-21)
+## Journal / Companion Feature
+
+**Status:** ✅ **COMPLETE** (February 24, 2026)
+**Architecture:** Reflective journaling with AI companion, mood tracking, and insights
+**Web App:** https://tomos-journal.vercel.app
+**Prompt System:** `lib/journalPrompt.ts` — Three-layer architecture (base + dynamic context + session state)
+
+### What is the Journal Feature?
+
+A personal journaling system with an AI companion that provides thoughtful reflections and insights. Adapted from the standalone "Journal Buddy" app's prompt design but rebuilt as part of the TomOS ecosystem. The companion is curious (not solution-finding), uses dry humor, keeps responses concise, and avoids therapy-speak.
+
+### Database Schema
+
+**4 New Tables (February 23, 2026):**
+
+- `journal_entries` — Core journal entries
+  - Fields: title, content, excerpt, mood (great/good/okay/low/rough), energy (high/medium/low), themes (String[]), reflection (AI-generated), wordCount, entryDate
+  - Indexes: entryDate, mood, full-text search GIN index on title+content
+
+- `journal_conversations` — Chat conversations with companion
+  - Fields: title, mode (free_form/guided/reflection), entryId (optional link to entry)
+  - Relation: belongs to JournalEntry (optional)
+
+- `journal_messages` — Individual chat messages
+  - Fields: role (user/assistant/system), content
+  - Relation: belongs to JournalConversation
+
+- `journal_summaries` — Weekly/monthly AI-generated summaries
+  - Fields: type (weekly/monthly), periodStart, periodEnd, content, themes, moodPattern, insights
+
+### API Endpoints
+
+**Entries:**
+```
+GET    /api/journal/entries              # List entries (filter by mood, date range, pagination)
+POST   /api/journal/entries              # Create entry (auto-extracts themes via Claude Haiku)
+GET    /api/journal/entries/[id]         # Get entry with conversations
+PATCH  /api/journal/entries/[id]         # Update entry
+DELETE /api/journal/entries/[id]         # Delete entry
+POST   /api/journal/entries/[id]/reflect # Generate AI reflection (Claude Sonnet)
+```
+
+**Chat:**
+```
+GET    /api/journal/chat                 # List conversations or get specific conversation
+POST   /api/journal/chat                 # Send message (creates conversation if new)
+```
+
+**Insights & Search:**
+```
+GET    /api/journal/insights             # Stats, mood distribution, top themes, mood timeline
+GET    /api/journal/search?q=...&mood=...  # Full-text search with GIN index
+```
+
+**Summaries:**
+```
+GET    /api/journal/summary              # List existing summaries
+POST   /api/journal/summary              # Generate weekly/monthly summary (Claude Sonnet)
+```
+
+### AI Integration
+
+- **Theme Extraction:** Fire-and-forget on entry creation using Claude Haiku (fast, cheap)
+- **Reflections:** Claude Sonnet with recent entries context and weekly themes
+- **Chat:** Full three-layer prompt system (base personality + dynamic journal context + session state)
+- **Summaries:** Claude Sonnet with period's entries for pattern analysis
+
+### Prompt System (`lib/journalPrompt.ts`)
+
+Three-layer architecture adapted from Journal Buddy:
+1. **Base Prompt** — Personality, tone, behavioral guidelines (curious, concise, dry humor, one thread)
+2. **Dynamic Context** — Built from recent entries, current mood patterns, active themes
+3. **Session State** — Conversation history, current entry context
+
+Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `buildDynamicContext()`
+
+---
+
+## Current Status (Updated 2026-02-24)
 
 ### Completed
 - iOS push notifications working (device registered)
 - macOS push notifications working (device registered)
-- **General Notes feature** - Full CRUD API with search and ecosystem integration
+- **General Notes feature** — Full CRUD API with search and ecosystem integration
+- **Journal / Companion feature** — Entries, AI reflections, chat, insights, search, summaries
+- **TomOS Web Apps** — 4 Next.js apps in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
+  - Tasks: https://tomos-tasks.vercel.app
+  - Notes: https://tomos-notes.vercel.app
+  - Matters: https://tomos-matters.vercel.app
+  - Journal: https://tomos-journal.vercel.app
 - ntfy fully deprecated and removed - all notifications via APNs
 - NLP task capture with smart date parsing (Sydney timezone)
 - 15-minute reminder notifications via APNs
@@ -495,11 +569,25 @@ TomOS/
 │   ├── task/                # Single task creation + auto-push
 │   │   └── batch/           # Batch task import
 │   ├── tasks/               # Task management
-│   ├── matters/             # MatterOS - Legal matter management ⚡ NEW
+│   ├── matters/             # MatterOS - Legal matter management
 │   │   └── [id]/
 │   │       ├── documents/   # Matter documents
 │   │       ├── events/      # Matter activity timeline
 │   │       └── notes/       # Matter notes and research
+│   ├── notes/               # General Notes feature
+│   │   ├── search/          # Full-text search
+│   │   ├── templates/       # Note templates
+│   │   └── [id]/
+│   │       ├── actions/     # Note actions (archive, duplicate, etc.)
+│   │       └── backlinks/   # Reverse reference tracking
+│   ├── journal/             # Journal / Companion feature ⚡ NEW
+│   │   ├── entries/         # CRUD for journal entries
+│   │   │   └── [id]/
+│   │   │       └── reflect/ # AI reflection generation
+│   │   ├── chat/            # Companion chat conversations
+│   │   ├── insights/        # Stats, mood patterns, theme trends
+│   │   ├── search/          # Full-text search with GIN index
+│   │   └── summary/         # Weekly/monthly AI summaries
 │   ├── calendar/            # Google Calendar sync
 │   ├── email/               # Email-to-task processing
 │   ├── focus/               # Focus mode state
@@ -507,11 +595,13 @@ TomOS/
 │   ├── suggestions/         # AI task suggestions
 │   ├── health/              # Health check
 │   └── cron/                # Scheduled jobs
+├── lib/
+│   └── journalPrompt.ts     # Three-layer prompt system for companion ⚡ NEW
 ├── prisma/
-│   ├── schema.prisma        # Database schema (Tasks + MatterOS)
+│   ├── schema.prisma        # Database schema (Tasks + MatterOS + Notes + Journal)
 │   └── migrations/          # Migration history
 ├── types/
-│   └── matteros.ts          # MatterOS TypeScript types ⚡ NEW
+│   └── matteros.ts          # MatterOS TypeScript types
 ├── docs/
 │   ├── APNS_SETUP.md        # APNs implementation guide
 │   └── postgres-migration/  # PostgreSQL migration docs

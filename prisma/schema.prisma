@@ -396,6 +396,21 @@ model StravaToken {
   @@map("strava_tokens")
 }
 
+model RecoveryCheckin {
+  id           String   @id @default(uuid())
+  date         DateTime @unique @db.Date
+  sleepQuality String   // "bad", "ok", "great"
+  energy       String   // "low", "medium", "high"
+  soreness     String   // "none", "mild", "sore"
+  notes        String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("recovery_checkins")
+  @@index([date])
+}
+
 // ============================================
 // JOURNAL - Reflective journaling with AI companion
 // ============================================
