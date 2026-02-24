@@ -1,7 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import Anthropic from '@anthropic-ai/sdk';
 
 const prisma = new PrismaClient();
+
+// Fire-and-forget: extract themes from content using Claude
+async function extractThemes(entryId: string, content: string) {
+  try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-3-20240307',
+      max_tokens: 150,
+      messages: [{
+        role: 'user',
+        content: `Extract 2-5 key themes from this journal entry. Return ONLY a JSON array of lowercase single-word or two-word theme strings. No explanation.
+
+Examples: ["work", "kids", "exercise", "anxiety", "sleep", "running", "legal work"]
+
+Entry:
+${content.substring(0, 1000)}`,
+      }],
+    });
+
+    const text = response.content[0].type === 'text' ? response.content[0].text : '[]';
+    const themes = JSON.parse(text.trim());
+
+    if (Array.isArray(themes) && themes.length > 0) {
+      await prisma.journalEntry.update({
+        where: { id: entryId },
+        data: { themes },
+      });
+    }
+  } catch (err) {
+    console.error('Background theme extraction error:', err);
+  }
+}
 
 // GET /api/journal/entries - List journal entries
 export async function GET(request: NextRequest) {
@@ -91,6 +125,13 @@ export async function POST(request: NextRequest) {
         entryDate: body.entryDate ? new Date(body.entryDate) : new Date(),
       },
     });
+
+    // Fire-and-forget: extract themes in background (don't block response)
+    if (!body.themes || body.themes.length === 0) {
+      extractThemes(entry.id, content).catch(err =>
+        console.error('Theme extraction failed:', err)
+      );
+    }
 
     return NextResponse.json({
       success: true,
