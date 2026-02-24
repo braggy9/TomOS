@@ -11,6 +11,7 @@ const RequestBody = z.object({
   tags: z.array(z.string()).optional().default([]),
   context: z.string().optional(),
   suggest_tags: z.boolean().optional().default(false),
+  parentId: z.string().uuid().optional(),
 });
 
 const NOTION_DATABASE_ID = "739144099ebc4ba1ba619dd1a5a08d25";
@@ -236,7 +237,7 @@ async function createNotionPage(parsedTask: ParsedTask, source: string): Promise
   return response.id;
 }
 
-async function createPostgresTask(parsedTask: ParsedTask, source: string, userTags: string[]): Promise<string> {
+async function createPostgresTask(parsedTask: ParsedTask, source: string, userTags: string[], parentId?: string): Promise<string> {
   console.log('Creating Postgres task with parsed data:', JSON.stringify(parsedTask, null, 2));
 
   // Map Notion priority to Prisma priority
@@ -281,6 +282,7 @@ async function createPostgresTask(parsedTask: ParsedTask, source: string, userTa
       status: 'todo',
       priority,
       dueDate: parsedTask.dueDate ? new Date(parsedTask.dueDate) : null,
+      ...(parentId ? { parentId } : {}),
     },
   });
 
@@ -445,7 +447,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { task, source, tags: userTags, context: userContext, suggest_tags } = parsed.data;
+    const { task, source, tags: userTags, context: userContext, suggest_tags, parentId } = parsed.data;
 
     // Parse task with Claude AI
     const parsedTask = await parseTaskWithClaude(task);
@@ -462,7 +464,7 @@ export async function POST(req: Request) {
 
     // NEW: Postgres implementation
     if (USE_POSTGRES) {
-      const taskId = await createPostgresTask(finalTask, source, normalizedTags);
+      const taskId = await createPostgresTask(finalTask, source, normalizedTags, parentId);
       scheduleReminder(parsedTask, taskId);
 
       // Auto-sync to calendar (don't await - run in background)

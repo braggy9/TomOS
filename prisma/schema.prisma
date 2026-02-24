@@ -41,12 +41,15 @@ model Task {
   completedAt DateTime?
   projectId   String?
   matterId    String?   // Link to MatterOS matter
+  parentId    String?   // Subtask parent (one level deep)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   // Relations
   project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
   matter      Matter?       @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  parent      Task?         @relation("Subtasks", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Task[]        @relation("Subtasks")
   tags        TaskTag[]
   notes       Note[]
   gymSessions GymSession[]
@@ -57,6 +60,7 @@ model Task {
   @@index([projectId])
   @@index([matterId])
   @@index([dueDate])
+  @@index([parentId])
 }
 
 // ============================================

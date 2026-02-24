@@ -10,9 +10,69 @@ const UpdateTaskBody = z.object({
   context: z.array(z.string()).optional(),
   dueDate: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
+  parentId: z.string().nullable().optional(),
 });
 
 const USE_POSTGRES = process.env.USE_POSTGRES === "true";
+
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    if (USE_POSTGRES) {
+      const task = await prisma.task.findUnique({
+        where: { id },
+        include: {
+          tags: { include: { tag: true } },
+          children: {
+            include: {
+              tags: { include: { tag: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      });
+
+      if (!task) {
+        return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      }
+
+      const formatTask = (t: any) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.dueDate?.toISOString() || null,
+        completedAt: t.completedAt?.toISOString() || null,
+        parentId: t.parentId || null,
+        tags: t.tags?.map((tt: any) => tt.tag) || [],
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+      });
+
+      return NextResponse.json({
+        success: true,
+        task: {
+          ...formatTask(task),
+          subtasks: task.children.map(formatTask),
+          subtaskCount: task.children.length,
+        },
+      });
+    }
+
+    return NextResponse.json({ error: "Not implemented for Notion" }, { status: 501 });
+  } catch (error) {
+    console.error("Error fetching task:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch task", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function PATCH(
   req: Request,
@@ -62,6 +122,10 @@ export async function PATCH(
 
       if (validatedData.dueDate !== undefined) {
         updateData.dueDate = validatedData.dueDate ? new Date(validatedData.dueDate) : null;
+      }
+
+      if (validatedData.parentId !== undefined) {
+        updateData.parentId = validatedData.parentId;
       }
 
       // Update task

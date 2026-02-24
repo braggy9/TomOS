@@ -15,6 +15,9 @@ export async function GET() {
     // NEW: Postgres implementation
     if (USE_POSTGRES) {
       const tasks = await prisma.task.findMany({
+        where: {
+          parentId: null, // Only top-level tasks (not subtasks)
+        },
         include: {
           project: {
             select: {
@@ -27,7 +30,10 @@ export async function GET() {
             include: {
               tag: true
             }
-          }
+          },
+          children: {
+            select: { id: true },
+          },
         },
         orderBy: [
           { priority: 'desc' }, // urgent > high > medium > low
@@ -44,6 +50,8 @@ export async function GET() {
         priority: task.priority,
         dueDate: task.dueDate?.toISOString() || null,
         completedAt: task.completedAt?.toISOString() || null,
+        parentId: task.parentId || null,
+        subtaskCount: task.children?.length || 0,
         project: task.project,
         tags: task.tags.map((tt: any) => tt.tag),
         createdAt: task.createdAt.toISOString(),

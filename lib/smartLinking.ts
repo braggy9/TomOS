@@ -42,13 +42,20 @@ export function parseSmartLinks(content: string): ParsedLink[] {
   }
 
   // Pattern 2: #matter mentions
-  // Matches: #matter-123, #PUB-2026-001, #CLT-001
-  const matterPattern = /#([A-Z]{2,4}-\d{4}-\d{3}|matter-[a-zA-Z0-9-]+|\d+)/g;
+  // Matches: #PUB-2026-001, #matter-123, #"Matter Title", #single-word, #123
+  const matterPattern = /#(?:"([^"]+)"|([A-Z]{2,4}-\d{4}-\d{3}|matter-[a-zA-Z0-9-]+|\d+|[a-zA-Z][a-zA-Z0-9-_]*))/g;
 
   while ((match = matterPattern.exec(content)) !== null) {
+    // Skip markdown headings (# followed by space at line start)
+    const lineStart = content.lastIndexOf('\n', match.index) + 1;
+    const beforeHash = content.substring(lineStart, match.index).trim();
+    if (beforeHash === '' && content[match.index + 1] === ' ') continue;
+    // Skip hex colors like #7C3AED
+    if (/^#[0-9a-fA-F]{3,8}$/.test(match[0])) continue;
+
     links.push({
       type: 'matter',
-      identifier: match[1],
+      identifier: match[1] || match[2],
       display: match[0],
       position: { start: match.index, end: matterPattern.lastIndex }
     });
