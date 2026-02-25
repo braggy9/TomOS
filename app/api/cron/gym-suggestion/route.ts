@@ -67,13 +67,14 @@ export async function GET(request: NextRequest) {
     const sydneyDate = new Date(
       new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
     )
-    const recovery = await prisma.recoveryCheckin.findUnique({
-      where: { date: sydneyDate },
+    const recovery = await prisma.recoveryCheckIn.findFirst({
+      where: { date: { gte: sydneyDate } },
+      orderBy: { date: 'desc' },
     })
 
     let recoveryNote = ''
     if (recovery) {
-      if (recovery.soreness === 'sore' || recovery.sleepQuality === 'bad') {
+      if (recovery.soreness <= 2 || recovery.sleepQuality <= 2) {
         recoveryNote = ' (take it easy today)'
       }
     }
