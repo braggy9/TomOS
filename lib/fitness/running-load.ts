@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import type { LoadFactor } from '@/types/fitness'
+import type { LoadFactor, RunningLoadContext } from '@/types/fitness'
 
 interface StravaActivity {
   moving_time: number       // seconds
@@ -46,12 +46,108 @@ export async function getWeeklyRunningLoad(days: number = 7): Promise<number> {
 }
 
 /**
- * Classify running load as low/moderate/high
+ * Classify running load relative to personal baseline.
+ * Falls back to hardcoded thresholds if not enough history for baseline.
  */
-export function classifyLoad(load: number): LoadFactor {
+export function classifyLoad(load: number, baseline?: number | null): LoadFactor {
+  if (baseline && baseline > 0) {
+    const ratio = load / baseline
+    if (ratio > 1.3) return 'high'
+    if (ratio > 0.8) return 'moderate'
+    return 'low'
+  }
+  // Fallback to absolute thresholds
   if (load > 500) return 'high'
   if (load > 300) return 'moderate'
   return 'low'
+}
+
+/**
+ * Calculate Acute:Chronic Workload Ratio (ACWR)
+ * Acute = 7-day rolling average daily load
+ * Chronic = 28-day rolling average daily load
+ */
+export async function getACWR(): Promise<{ acwr: number; acute: number; chronic: number }> {
+  const [acuteLoad, chronicLoad] = await Promise.all([
+    getWeeklyRunningLoad(7),
+    getWeeklyRunningLoad(28),
+  ])
+
+  const acuteAvg = acuteLoad / 7
+  const chronicAvg = chronicLoad / 28
+
+  const acwr = chronicAvg > 0 ? Math.round((acuteAvg / chronicAvg) * 100) / 100 : 0
+
+  return { acwr, acute: acuteLoad, chronic: chronicLoad }
+}
+
+/**
+ * Determine load trend by comparing last 7 days to the previous 7 days
+ */
+async function getLoadTrend(): Promise<'increasing' | 'decreasing' | 'stable'> {
+  const now = new Date()
+  const sevenDaysAgo = new Date(now)
+  sevenDaysAgo.setDate(now.getDate() - 7)
+  const fourteenDaysAgo = new Date(now)
+  fourteenDaysAgo.setDate(now.getDate() - 14)
+
+  const [currentWeek, previousWeek] = await Promise.all([
+    prisma.runningSync.aggregate({
+      where: { date: { gte: sevenDaysAgo } },
+      _sum: { trainingLoad: true },
+    }),
+    prisma.runningSync.aggregate({
+      where: { date: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+      _sum: { trainingLoad: true },
+    }),
+  ])
+
+  const current = currentWeek._sum.trainingLoad || 0
+  const previous = previousWeek._sum.trainingLoad || 0
+
+  if (previous === 0) return 'stable'
+  const ratio = current / previous
+  if (ratio > 1.15) return 'increasing'
+  if (ratio < 0.85) return 'decreasing'
+  return 'stable'
+}
+
+/**
+ * Rich running load context combining ACWR, trend, and recommendation.
+ */
+export async function getRunningLoadContext(): Promise<RunningLoadContext> {
+  const [weeklyLoad, { acwr, acute, chronic }, trend] = await Promise.all([
+    getWeeklyRunningLoad(7),
+    getACWR(),
+    getLoadTrend(),
+  ])
+
+  // Personal baseline is the 28-day weekly average
+  const weeklyBaseline = chronic / 4
+  const loadFactor = classifyLoad(weeklyLoad, weeklyBaseline || null)
+
+  let recommendation: string
+  if (acwr > 1.5) {
+    recommendation = 'Spike detected — high injury risk. Consider rest or easy movement only.'
+  } else if (acwr > 1.3) {
+    recommendation = 'Load rising fast. Scale back intensity or skip high-impact work.'
+  } else if (acwr < 0.5 && chronic > 0) {
+    recommendation = 'Undertraining — ramp back up gradually.'
+  } else if (acwr >= 0.8 && acwr <= 1.3) {
+    recommendation = 'Sweet spot — load is well managed.'
+  } else {
+    recommendation = 'Moderate load. Continue as planned.'
+  }
+
+  return {
+    weeklyLoad,
+    acwr,
+    acuteLoad: acute,
+    chronicLoad: chronic,
+    trend,
+    loadFactor,
+    recommendation,
+  }
 }
 
 /**

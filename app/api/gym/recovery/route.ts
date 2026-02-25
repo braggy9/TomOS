@@ -2,100 +2,57 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * GET /api/gym/recovery
- * Get recent recovery check-ins
- * Query params: days (default 14)
+ * GET /api/gym/recovery — List recovery check-ins
  */
 export async function GET(request: NextRequest) {
   try {
-    const days = parseInt(request.nextUrl.searchParams.get('days') || '14')
-    const since = new Date()
-    since.setDate(since.getDate() - days)
+    const searchParams = request.nextUrl.searchParams
+    const limit = parseInt(searchParams.get('limit') || '30')
 
-    const checkins = await prisma.recoveryCheckin.findMany({
-      where: { date: { gte: since } },
+    const checkins = await prisma.recoveryCheckIn.findMany({
       orderBy: { date: 'desc' },
+      take: limit,
     })
 
     return NextResponse.json({ success: true, data: checkins })
   } catch (error) {
     console.error('Error fetching recovery check-ins:', error)
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch recovery check-ins' },
-      { status: 500 }
-    )
+    return NextResponse.json({ success: false, error: 'Failed to fetch check-ins' }, { status: 500 })
   }
 }
 
 /**
- * POST /api/gym/recovery
- * Create or update today's recovery check-in
- * Body: { sleepQuality, energy, soreness, notes? }
+ * POST /api/gym/recovery — Create a recovery check-in
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sleepQuality, energy, soreness, notes } = body
+    const { sleepQuality, soreness, energy, motivation, hoursSlept, notes } = body
 
-    if (!sleepQuality || !energy || !soreness) {
+    if (!sleepQuality || !soreness || !energy || !motivation) {
       return NextResponse.json(
-        { success: false, error: 'sleepQuality, energy, and soreness are required' },
+        { success: false, error: 'sleepQuality, soreness, energy, and motivation are required (1-5)' },
         { status: 400 }
       )
     }
 
-    const validSleep = ['bad', 'ok', 'great']
-    const validEnergy = ['low', 'medium', 'high']
-    const validSoreness = ['none', 'mild', 'sore']
+    const readinessScore = (sleepQuality + soreness + energy + motivation) / 4
 
-    if (!validSleep.includes(sleepQuality)) {
-      return NextResponse.json(
-        { success: false, error: `sleepQuality must be one of: ${validSleep.join(', ')}` },
-        { status: 400 }
-      )
-    }
-    if (!validEnergy.includes(energy)) {
-      return NextResponse.json(
-        { success: false, error: `energy must be one of: ${validEnergy.join(', ')}` },
-        { status: 400 }
-      )
-    }
-    if (!validSoreness.includes(soreness)) {
-      return NextResponse.json(
-        { success: false, error: `soreness must be one of: ${validSoreness.join(', ')}` },
-        { status: 400 }
-      )
-    }
-
-    // Use Sydney date for "today"
-    const sydneyDate = new Date(
-      new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
-    )
-
-    const checkin = await prisma.recoveryCheckin.upsert({
-      where: { date: sydneyDate },
-      create: {
-        date: sydneyDate,
+    const checkin = await prisma.recoveryCheckIn.create({
+      data: {
         sleepQuality,
-        energy,
         soreness,
-        notes: notes || null,
-      },
-      update: {
-        sleepQuality,
         energy,
-        soreness,
-        notes: notes || null,
-        updatedAt: new Date(),
+        motivation,
+        hoursSlept: hoursSlept ?? null,
+        notes: notes ?? null,
+        readinessScore,
       },
     })
 
     return NextResponse.json({ success: true, data: checkin }, { status: 201 })
   } catch (error) {
-    console.error('Error saving recovery check-in:', error)
-    return NextResponse.json(
-      { success: false, error: 'Failed to save recovery check-in' },
-      { status: 500 }
-    )
+    console.error('Error creating recovery check-in:', error)
+    return NextResponse.json({ success: false, error: 'Failed to create check-in' }, { status: 500 })
   }
 }

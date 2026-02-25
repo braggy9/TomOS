@@ -388,6 +388,35 @@ model RunningSync {
   @@index([source])
 }
 
+model RecoveryCheckIn {
+  id              String   @id @default(uuid())
+  date            DateTime @default(now())
+  sleepQuality    Int      // 1-5
+  soreness        Int      // 1-5 (1=very sore, 5=fresh)
+  energy          Int      // 1-5
+  motivation      Int      // 1-5
+  hoursSlept      Float?
+  notes           String?
+  readinessScore  Float?   // Computed average
+  createdAt       DateTime @default(now())
+
+  @@map("recovery_checkins")
+  @@index([date])
+}
+
+model NutritionLog {
+  id              String   @id @default(uuid())
+  date            DateTime @default(now())
+  proteinRating   Int?     // 1-3 (low/okay/good)
+  hydrationRating Int?     // 1-3
+  vegetableRating Int?     // 1-3
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@map("nutrition_logs")
+  @@index([date])
+}
+
 model StravaToken {
   id            String   @id @default("singleton")
   accessToken   String
@@ -398,21 +427,6 @@ model StravaToken {
   updatedAt     DateTime @updatedAt
 
   @@map("strava_tokens")
-}
-
-model RecoveryCheckin {
-  id           String   @id @default(uuid())
-  date         DateTime @unique @db.Date
-  sleepQuality String   // "bad", "ok", "great"
-  energy       String   // "low", "medium", "high"
-  soreness     String   // "none", "mild", "sore"
-  notes        String?
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("recovery_checkins")
-  @@index([date])
 }
 
 // ============================================

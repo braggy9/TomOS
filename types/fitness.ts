@@ -114,6 +114,94 @@ export interface RunningSync {
   updatedAt: Date;
 }
 
+// Recovery Check-In
+export interface RecoveryCheckIn {
+  id: string;
+  date: Date;
+  sleepQuality: number;   // 1-5
+  soreness: number;        // 1-5 (1=very sore, 5=fresh)
+  energy: number;          // 1-5
+  motivation: number;      // 1-5
+  hoursSlept: number | null;
+  notes: string | null;
+  readinessScore: number | null; // Computed average
+  createdAt: Date;
+}
+
+export interface CreateRecoveryCheckInRequest {
+  sleepQuality: number;
+  soreness: number;
+  energy: number;
+  motivation: number;
+  hoursSlept?: number;
+  notes?: string;
+}
+
+// Nutrition Log
+export interface NutritionLog {
+  id: string;
+  date: Date;
+  proteinRating: number | null;     // 1-3 (low/okay/good)
+  hydrationRating: number | null;   // 1-3
+  vegetableRating: number | null;   // 1-3
+  notes: string | null;
+  createdAt: Date;
+}
+
+export interface CreateNutritionLogRequest {
+  proteinRating?: number;
+  hydrationRating?: number;
+  vegetableRating?: number;
+  notes?: string;
+}
+
+// Running Load Context (ACWR-enhanced)
+export interface RunningLoadContext {
+  weeklyLoad: number;
+  acwr: number;
+  acuteLoad: number;
+  chronicLoad: number;
+  trend: 'increasing' | 'decreasing' | 'stable';
+  loadFactor: LoadFactor;
+  recommendation: string;
+}
+
+// Progress Data
+export interface ProgressData {
+  exerciseId: string;
+  exerciseName: string;
+  dataPoints: Array<{
+    date: string;
+    weight: number;
+    reps: number | null;
+    rpe: number | null;
+  }>;
+}
+
+export interface ProgressSummary {
+  totalSessions: number;
+  weeklyRate: number;          // avg sessions per week over last 90 days
+  currentStreak: number;       // consecutive weeks with at least 1 session
+  personalRecords: Array<{
+    exerciseName: string;
+    weight: number;
+    date: string;
+  }>;
+  sessionsThisWeek: number;
+  sessionsThisMonth: number;
+}
+
+// Daily Plan
+export interface DailyPlan {
+  headline: string;
+  shouldTrain: boolean;
+  suggestion: SessionSuggestion | null;
+  recoveryScore: number | null;
+  nutritionNudge: string | null;
+  runningContext: RunningLoadContext;
+  context: string;
+}
+
 // API Request Types
 
 export interface CreateSessionRequest {
@@ -184,6 +272,9 @@ export interface QuickLogExerciseInput {
 
 export interface WeightSuggestion {
   weight: number;
+  sets?: number;
+  reps?: number;
+  confidence?: 'low' | 'medium' | 'high';
   rationale: string;
 }
 
@@ -191,8 +282,18 @@ export interface ExerciseSuggestion {
   name: string;
   exerciseId: string;
   suggestedWeight: number;
+  suggestedSets?: number;
+  suggestedReps?: number;
+  confidence?: 'low' | 'medium' | 'high';
   lastWeight: number | null;
   rationale: string;
+}
+
+export interface WodInfo {
+  name: string;        // e.g. "AMRAP 15", "21-15-9"
+  format: string;      // amrap, emom, fortime, tabata
+  duration: number | null;
+  description: string;
 }
 
 export interface SessionSuggestion {
@@ -200,12 +301,23 @@ export interface SessionSuggestion {
   rationale: string;
   weekType: WeekType;
   runningLoadLast7Days: number;
+  runningContext?: {
+    acwr: number;
+    trend: 'increasing' | 'decreasing' | 'stable';
+    weeklyLoad: number;
+    recommendation: string;
+  };
+  frequency?: {
+    thisWeek: number;
+    thisMonth: number;
+  };
   lastSession: {
     type: string;
     date: string;
     daysAgo: number;
   } | null;
   suggestedExercises: ExerciseSuggestion[];
+  wod?: WodInfo;  // Present when Session C (CrossFit/Metcon)
 }
 
 export interface RunningStats {

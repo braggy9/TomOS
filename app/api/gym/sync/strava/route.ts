@@ -16,7 +16,11 @@ export async function GET(request: NextRequest) {
   if (mode === 'subscribe' && challenge) {
     // Verify the token matches our expected value
     const expectedToken = process.env.STRAVA_VERIFY_TOKEN
-    if (expectedToken && verifyToken !== expectedToken) {
+    if (!expectedToken) {
+      console.error('STRAVA_VERIFY_TOKEN is not configured — rejecting webhook verification')
+      return NextResponse.json({ error: 'Webhook verification not configured' }, { status: 500 })
+    }
+    if (verifyToken !== expectedToken) {
       return NextResponse.json({ error: 'Invalid verify token' }, { status: 403 })
     }
 
