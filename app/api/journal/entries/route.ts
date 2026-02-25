@@ -10,7 +10,7 @@ async function extractThemes(entryId: string, content: string) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-3-20240307',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 150,
       messages: [{
         role: 'user',
