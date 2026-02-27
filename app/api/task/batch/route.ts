@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
-import { Client } from '@notionhq/client';
 import { prisma } from '@/lib/prisma';
-
-const NOTION_DATABASE_ID = '739144099ebc4ba1ba619dd1a5a08d25';
-const USE_POSTGRES = process.env.USE_POSTGRES === 'true';
 
 /**
  * Natural Language Batch Import
  *
  * Input: A brain dump of multiple tasks in natural language
- * Output: Multiple properly-tagged individual tasks in Notion
+ * Output: Multiple properly-tagged individual tasks in Postgres
  *
  * Example:
  * "dentist tomorrow, review contract #urgent @john, prep slides for friday, book flights to sydney"
@@ -112,123 +108,8 @@ Output: [
   return parsed;
 }
 
-async function createNotionPage(parsedTask: ParsedTask, source: string): Promise<string> {
-  const notion = new Client({
-    auth: process.env.NOTION_API_KEY,
-  });
-
-  const now = new Date().toISOString();
-
-  // Build page content (children blocks) for tags and mentions
-  const children: any[] = [];
-
-  // Add tags if present
-  if (parsedTask.tags.length > 0) {
-    children.push({
-      object: 'block',
-      type: 'paragraph',
-      paragraph: {
-        rich_text: [
-          {
-            type: 'text',
-            text: { content: 'Tags: ' },
-            annotations: { bold: true },
-          },
-          {
-            type: 'text',
-            text: { content: parsedTask.tags.map((tag) => `#${tag}`).join(', ') },
-          },
-        ],
-      },
-    });
-  }
-
-  // Add mentions if present
-  if (parsedTask.mentions.length > 0) {
-    children.push({
-      object: 'block',
-      type: 'paragraph',
-      paragraph: {
-        rich_text: [
-          {
-            type: 'text',
-            text: { content: 'Mentions: ' },
-            annotations: { bold: true },
-          },
-          {
-            type: 'text',
-            text: { content: parsedTask.mentions.map((m) => `@${m}`).join(', ') },
-          },
-        ],
-      },
-    });
-  }
-
-  // Add subtasks if present
-  if (parsedTask.subtasks.length > 0) {
-    children.push({
-      object: 'block',
-      type: 'heading_3',
-      heading_3: {
-        rich_text: [{ type: 'text', text: { content: 'Subtasks' } }],
-      },
-    });
-
-    parsedTask.subtasks.forEach((subtask) => {
-      children.push({
-        object: 'block',
-        type: 'to_do',
-        to_do: {
-          rich_text: [{ type: 'text', text: { content: subtask } }],
-          checked: false,
-        },
-      });
-    });
-  }
-
-  const response = await notion.pages.create({
-    parent: { database_id: NOTION_DATABASE_ID },
-    properties: {
-      Task: {
-        title: [{ text: { content: parsedTask.title } }],
-      },
-      Status: {
-        select: { name: 'Inbox' },
-      },
-      Priority: {
-        select: { name: parsedTask.priority },
-      },
-      Context: {
-        multi_select: [{ name: parsedTask.context }],
-      },
-      Energy: {
-        select: { name: parsedTask.energy },
-      },
-      Time: {
-        select: { name: parsedTask.time },
-      },
-      Source: {
-        select: { name: source },
-      },
-      ...(parsedTask.dueDate
-        ? {
-            'Due Date': {
-              date: { start: parsedTask.dueDate },
-            },
-          }
-        : {}),
-      Captured: {
-        date: { start: now },
-      },
-    },
-    ...(children.length > 0 ? { children } : {}),
-  });
-
-  return response.id;
-}
-
 async function createPostgresTask(parsedTask: ParsedTask, source: string): Promise<{ id: string; title: string }> {
-  // Map Notion priority to Prisma priority
+  // Map parsed priority to Prisma priority
   const priorityMap: Record<string, string> = {
     'Urgent': 'urgent',
     'Important': 'high',
@@ -251,7 +132,7 @@ async function createPostgresTask(parsedTask: ParsedTask, source: string): Promi
     descriptionParts.push('\nMentions: ' + parsedTask.mentions.map((m) => `@${m}`).join(', '));
   }
 
-  // Create metadata tags for Notion-specific fields
+  // Create metadata tags
   const metadataTags: string[] = [
     `context:${parsedTask.context}`,
     `energy:${parsedTask.energy}`,
@@ -326,71 +207,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // NEW: Postgres implementation
-    if (USE_POSTGRES) {
-      console.log('[BATCH] Creating tasks in Postgres...');
-      const createdTasks = await Promise.all(
-        parsedTasks.map(async (task, index) => {
-          console.log(`[BATCH] Creating task ${index + 1}/${parsedTasks.length}: ${task.title}`);
-          const result = await createPostgresTask(task, source);
-          console.log(`[BATCH] Created task ${index + 1} with ID: ${result.id}`);
-          return {
-            taskId: result.id,
-            title: result.title,
-            priority: task.priority,
-            dueDate: task.dueDate,
-          };
-        })
-      );
-
-      // Send APNs push notification for batch import
-      console.log('[BATCH] Sending APNs notification...');
-      try {
-        const baseUrl = process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL}`
-          : 'https://tomos-task-api.vercel.app';
-
-        await fetch(`${baseUrl}/api/send-push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: `${createdTasks.length} Tasks Captured`,
-            body: createdTasks.map((t) => t.title).join(', '),
-            badge: createdTasks.length,
-          }),
-        });
-      } catch (error) {
-        console.error('[BATCH] Failed to send push notification:', error);
-      }
-
-      console.log(`[BATCH] Batch import: Created ${createdTasks.length} tasks in Postgres`);
-
-      return NextResponse.json({
-        success: true,
-        taskCount: createdTasks.length,
-        tasks: createdTasks,
-        message: `Successfully created ${createdTasks.length} tasks from batch input`,
-        source: 'postgres',
-      });
-    }
-
-    // OLD: Notion implementation (fallback)
-    if (!process.env.NOTION_API_KEY) {
-      return NextResponse.json(
-        { error: 'NOTION_API_KEY is not configured' },
-        { status: 500 }
-      );
-    }
-
-    console.log('[BATCH] Creating tasks in Notion...');
+    console.log('[BATCH] Creating tasks in Postgres...');
     const createdTasks = await Promise.all(
       parsedTasks.map(async (task, index) => {
         console.log(`[BATCH] Creating task ${index + 1}/${parsedTasks.length}: ${task.title}`);
-        const pageId = await createNotionPage(task, source);
-        console.log(`[BATCH] Created task ${index + 1} with ID: ${pageId}`);
+        const result = await createPostgresTask(task, source);
+        console.log(`[BATCH] Created task ${index + 1} with ID: ${result.id}`);
         return {
-          pageId,
-          title: task.title,
+          taskId: result.id,
+          title: result.title,
           priority: task.priority,
           dueDate: task.dueDate,
         };
@@ -417,14 +242,14 @@ export async function POST(req: NextRequest) {
       console.error('[BATCH] Failed to send push notification:', error);
     }
 
-    console.log(`[BATCH] Batch import: Created ${createdTasks.length} tasks in Notion`);
+    console.log(`[BATCH] Batch import: Created ${createdTasks.length} tasks in Postgres`);
 
     return NextResponse.json({
       success: true,
       taskCount: createdTasks.length,
       tasks: createdTasks,
       message: `Successfully created ${createdTasks.length} tasks from batch input`,
-      source: 'notion',
+      source: 'postgres',
     });
   } catch (error) {
     console.error('Error processing batch tasks:', error);

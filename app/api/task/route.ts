@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
-import { Client } from "@notionhq/client";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 
@@ -13,9 +12,6 @@ const RequestBody = z.object({
   suggest_tags: z.boolean().optional().default(false),
   parentId: z.string().uuid().optional(),
 });
-
-const NOTION_DATABASE_ID = "739144099ebc4ba1ba619dd1a5a08d25";
-const USE_POSTGRES = process.env.USE_POSTGRES === "true";
 
 interface ParsedTask {
   title: string;
@@ -110,137 +106,10 @@ function normalizeTagShortcuts(tags: string[]): string[] {
   });
 }
 
-async function createNotionPage(parsedTask: ParsedTask, source: string): Promise<string> {
-  const notion = new Client({
-    auth: process.env.NOTION_API_KEY,
-  });
-
-  console.log('Creating Notion page with database ID:', NOTION_DATABASE_ID);
-  console.log('Parsed task:', JSON.stringify(parsedTask, null, 2));
-
-  // Test database access first
-  try {
-    const dbInfo = await notion.databases.retrieve({ database_id: NOTION_DATABASE_ID });
-    console.log('Database retrieved successfully:', dbInfo.id);
-  } catch (dbError) {
-    console.error('Failed to retrieve database:', dbError);
-    throw new Error(`Database access failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
-  }
-
-  const now = new Date().toISOString();
-
-  // Build page content (children blocks) for subtasks, tags, and mentions
-  const children: any[] = [];
-
-  // Add tags if present
-  if (parsedTask.tags.length > 0) {
-    children.push({
-      object: "block",
-      type: "paragraph",
-      paragraph: {
-        rich_text: [
-          {
-            type: "text",
-            text: { content: "Tags: " },
-            annotations: { bold: true },
-          },
-          {
-            type: "text",
-            text: { content: parsedTask.tags.map(tag => `#${tag}`).join(", ") },
-          },
-        ],
-      },
-    });
-  }
-
-  // Add mentions if present
-  if (parsedTask.mentions.length > 0) {
-    children.push({
-      object: "block",
-      type: "paragraph",
-      paragraph: {
-        rich_text: [
-          {
-            type: "text",
-            text: { content: "Mentions: " },
-            annotations: { bold: true },
-          },
-          {
-            type: "text",
-            text: { content: parsedTask.mentions.map(mention => `@${mention}`).join(", ") },
-          },
-        ],
-      },
-    });
-  }
-
-  // Add subtasks as to-do blocks
-  if (parsedTask.subtasks.length > 0) {
-    children.push({
-      object: "block",
-      type: "heading_3",
-      heading_3: {
-        rich_text: [{ type: "text", text: { content: "Subtasks" } }],
-      },
-    });
-
-    parsedTask.subtasks.forEach((subtask) => {
-      children.push({
-        object: "block",
-        type: "to_do",
-        to_do: {
-          rich_text: [{ type: "text", text: { content: subtask } }],
-          checked: false,
-        },
-      });
-    });
-  }
-
-  const response = await notion.pages.create({
-    parent: { database_id: NOTION_DATABASE_ID },
-    properties: {
-      Task: {
-        title: [{ text: { content: parsedTask.title } }],
-      },
-      Status: {
-        select: { name: "Inbox" },
-      },
-      Priority: {
-        select: { name: parsedTask.priority },
-      },
-      Context: {
-        multi_select: [{ name: parsedTask.context }],
-      },
-      Energy: {
-        select: { name: parsedTask.energy },
-      },
-      Time: {
-        select: { name: parsedTask.time },
-      },
-      Source: {
-        select: { name: source },
-      },
-      ...(parsedTask.dueDate
-        ? {
-            "Due Date": {
-              date: { start: parsedTask.dueDate },
-            },
-          }
-        : {}),
-      Captured: {
-        date: { start: now },
-      },
-    },
-    ...(children.length > 0 ? { children } : {}),
-  });
-
-  return response.id;
-}
-
 async function createPostgresTask(parsedTask: ParsedTask, source: string, userTags: string[], parentId?: string): Promise<string> {
   console.log('Creating Postgres task with parsed data:', JSON.stringify(parsedTask, null, 2));
 
-  // Map Notion priority to Prisma priority
+  // Map parsed priority to Prisma priority
   const priorityMap: Record<string, string> = {
     'Urgent': 'urgent',
     'Important': 'high',
@@ -263,7 +132,7 @@ async function createPostgresTask(parsedTask: ParsedTask, source: string, userTa
     descriptionParts.push('\nMentions: ' + parsedTask.mentions.map(m => `@${m}`).join(', '));
   }
 
-  // Create metadata tags for Notion-specific fields
+  // Create metadata tags
   const metadataTags: string[] = [
     `context:${parsedTask.context}`,
     `energy:${parsedTask.energy}`,
@@ -310,7 +179,7 @@ async function createPostgresTask(parsedTask: ParsedTask, source: string, userTa
 
 // ntfy removed - using APNs push notifications exclusively
 
-async function syncTaskToCalendar(notionPageId: string, parsedTask: ParsedTask): Promise<void> {
+async function syncTaskToCalendar(taskId: string, parsedTask: ParsedTask): Promise<void> {
   // Only sync if task has a due date and calendar is configured
   if (!parsedTask.dueDate) {
     console.log('Skipping calendar sync: no due date');
@@ -333,13 +202,13 @@ async function syncTaskToCalendar(notionPageId: string, parsedTask: ParsedTask):
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'syncOne',
-        taskId: notionPageId,
+        taskId,
         refreshToken,
       }),
     });
 
     if (response.ok) {
-      console.log('Task synced to Google Calendar:', notionPageId);
+      console.log('Task synced to Google Calendar:', taskId);
     } else {
       const error = await response.json();
       console.error('Failed to sync task to calendar:', error);
@@ -350,7 +219,7 @@ async function syncTaskToCalendar(notionPageId: string, parsedTask: ParsedTask):
   }
 }
 
-function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
+function scheduleReminder(parsedTask: ParsedTask, taskId: string): void {
   if (!parsedTask.dueDate) return;
 
   const dueDate = new Date(parsedTask.dueDate);
@@ -383,7 +252,7 @@ function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
         body: JSON.stringify({
           title: 'Task Due Soon',
           body: `${parsedTask.title}\nDue in 15 minutes!`,
-          task_id: notionPageId,
+          task_id: taskId,
           priority: 'urgent',
           badge: 1,
         }),
@@ -400,23 +269,23 @@ function scheduleReminder(parsedTask: ParsedTask, notionPageId: string): void {
  * This notifies users when a new task is created.
  *
  * @param parsedTask - The parsed task details
- * @param notionPageId - The Notion page ID for deep linking
+ * @param taskId - The Postgres task ID for deep linking
  */
-async function sendAPNsPushNotification(parsedTask: ParsedTask, notionPageId: string): Promise<void> {
+async function sendAPNsPushNotification(parsedTask: ParsedTask, taskId: string): Promise<void> {
   try {
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : 'https://tomos-task-api.vercel.app';
 
-    console.log('📱 Sending APNs push notification for new task...');
+    console.log('Sending APNs push notification for new task...');
 
     const response = await fetch(`${baseUrl}/api/send-push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: '📋 New Task Created',
+        title: 'New Task Created',
         body: parsedTask.title,
-        task_id: notionPageId,
+        task_id: taskId,
         priority: parsedTask.priority.toLowerCase(),
         badge: 1,
       }),
@@ -424,13 +293,13 @@ async function sendAPNsPushNotification(parsedTask: ParsedTask, notionPageId: st
 
     if (response.ok) {
       const result = await response.json();
-      console.log(`✅ APNs push sent to ${result.sent_to} device(s)`);
+      console.log(`APNs push sent to ${result.sent_to} device(s)`);
     } else {
       const error = await response.json();
-      console.error('⚠️ APNs push failed:', error);
+      console.error('APNs push failed:', error);
     }
   } catch (error) {
-    console.error('❌ Error sending APNs push:', error);
+    console.error('Error sending APNs push:', error);
     // Don't throw - push notification failure shouldn't block task creation
   }
 }
@@ -462,61 +331,27 @@ export async function POST(req: Request) {
       finalTask.context = userContext as any;
     }
 
-    // NEW: Postgres implementation
-    if (USE_POSTGRES) {
-      const taskId = await createPostgresTask(finalTask, source, normalizedTags, parentId);
-      scheduleReminder(parsedTask, taskId);
-
-      // Auto-sync to calendar (don't await - run in background)
-      syncTaskToCalendar(taskId, parsedTask).catch(err =>
-        console.error('Background calendar sync error:', err)
-      );
-
-      // Send APNs push notification to iOS/macOS devices (don't await - run in background)
-      sendAPNsPushNotification(parsedTask, taskId).catch(err =>
-        console.error('Background APNs push error:', err)
-      );
-
-      console.log(`📋 Created task in Postgres: ${taskId}`);
-
-      return NextResponse.json({
-        success: true,
-        taskId,
-        parsedTask,
-        message: "Task created successfully",
-        source: 'postgres',
-      });
-    }
-
-    // OLD: Notion implementation (fallback)
-    if (!process.env.NOTION_API_KEY) {
-      return NextResponse.json(
-        { error: "NOTION_API_KEY is not configured" },
-        { status: 500 }
-      );
-    }
-
-    const notionPageId = await createNotionPage(finalTask, source);
-    scheduleReminder(parsedTask, notionPageId);
+    const taskId = await createPostgresTask(finalTask, source, normalizedTags, parentId);
+    scheduleReminder(parsedTask, taskId);
 
     // Auto-sync to calendar (don't await - run in background)
-    syncTaskToCalendar(notionPageId, parsedTask).catch(err =>
+    syncTaskToCalendar(taskId, parsedTask).catch(err =>
       console.error('Background calendar sync error:', err)
     );
 
     // Send APNs push notification to iOS/macOS devices (don't await - run in background)
-    sendAPNsPushNotification(parsedTask, notionPageId).catch(err =>
+    sendAPNsPushNotification(parsedTask, taskId).catch(err =>
       console.error('Background APNs push error:', err)
     );
 
-    console.log(`📋 Created task in Notion: ${notionPageId}`);
+    console.log(`Created task in Postgres: ${taskId}`);
 
     return NextResponse.json({
       success: true,
-      notionPageId,
+      taskId,
       parsedTask,
       message: "Task created successfully",
-      source: 'notion',
+      source: 'postgres',
     });
   } catch (error) {
     console.error("Error processing task:", error);

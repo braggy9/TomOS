@@ -2,10 +2,21 @@
 
 ## Project Identity
 - **Name**: TomOS
-- **Purpose**: ADHD-friendly task management with intelligent push notifications
+- **Purpose**: ADHD-friendly task management with intelligent push notifications, legal matter tracking, notes, journaling, and fitness
 - **User**: Tom Bragg (Sydney, Australia)
 
 ## Architecture Decisions
+
+### Database: PostgreSQL (Neon, Sydney) via Prisma
+- PostgreSQL is the ONLY database — Notion is NOT used
+- All data stored in Neon Postgres (Sydney region)
+- Prisma ORM for all database operations
+- Exception: device tokens still in Notion (migration to Postgres pending)
+
+### Client: tomos-web PWAs
+- tomos-web monorepo is the primary (only) frontend
+- 5 PWAs: Tasks, Notes, Matters, Journal, Fitness
+- Swift native apps are fully deprecated — do not reference or build them
 
 ### Push Notifications: APNs Only
 - Use Apple Push Notification service (APNs) for all push notifications
@@ -14,12 +25,11 @@
 
 ### Two Separate Projects
 - **Backend** (this repo): `/Users/tombragg/Desktop/Projects/TomOS/`
-- **iOS/macOS App**: `/Users/tombragg/Desktop/TomOS/`
+- **tomos-web** (frontend): `/Users/tombragg/Desktop/Projects/tomos-web/`
 - Do NOT confuse these - they are separate git repos
 
 ### Timezone: Sydney
 - All date/time operations use `Australia/Sydney` timezone
-- Scheduled notifications: 8am and 6pm Sydney time
 - Claude AI receives current Sydney time for relative date parsing
 
 ## Code Standards
@@ -35,10 +45,6 @@
 - Use proper types, avoid `any` where possible
 - Zod for runtime validation
 
-### Notion Integration
-- Database ID: `739144099ebc4ba1ba619dd1a5a08d25` (main tasks)
-- Device tokens stored in separate auto-created database
-
 ## Deployment
 
 ### Vercel
@@ -46,10 +52,10 @@
 - Production URL: https://tomos-task-api.vercel.app
 - All env vars configured in Vercel dashboard
 
-### GitHub Actions
-- Handles scheduled notifications (not Vercel crons - free tier limit)
-- Uses `CRON_SECRET` for authentication
-- Workflow: `.github/workflows/scheduled-notifications.yml`
+### Scheduled Jobs
+- **Legal deadlines:** Vercel cron, 6:00am Sydney daily
+- **Gym suggestion:** GitHub Actions, 6:30am Sydney daily
+- Morning overview and EOD summary are disabled
 
 ## Constraints
 
@@ -57,4 +63,5 @@
 2. Don't over-engineer for hypothetical requirements
 3. Sydney timezone for all operations
 4. APNs only, no ntfy
-5. Read CLAUDE_CODE_HANDOVER.md at session start
+5. PostgreSQL only, no Notion (except legacy device tokens)
+6. tomos-web PWAs are the frontend, not Swift apps

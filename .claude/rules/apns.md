@@ -10,7 +10,7 @@ This is the ONLY push notification method - ntfy has been fully deprecated.
 ```
 Backend → /api/send-push → APNs HTTP/2 → iOS/macOS Device
                 ↓
-         Notion DB (device tokens)
+         PostgreSQL (device_tokens table)
 ```
 
 ## Implementation
@@ -19,10 +19,21 @@ Backend → /api/send-push → APNs HTTP/2 → iOS/macOS Device
 1. iOS/macOS app requests push permission
 2. Apple returns device token
 3. App calls `/api/register-device` with token
-4. Token stored in Notion "Device Tokens" database
+4. Token stored in PostgreSQL `device_tokens` table
+
+**Target schema (device_tokens):**
+- `id` — UUID primary key
+- `deviceToken` — APNs device token string (unique)
+- `platform` — ios, macos, ipados
+- `bundleId` — com.tomos.app
+- `appVersion` — Client app version
+- `active` — Boolean (default true)
+- `createdAt` / `updatedAt` — Timestamps
+
+**Note:** Device token migration from Notion to Postgres is pending. Current implementation still reads from Notion. The target state is PostgreSQL only.
 
 ### Sending Push (`/api/send-push`)
-1. Fetch all active device tokens from Notion
+1. Fetch all active device tokens from database
 2. Generate JWT for APNs auth (ES256 algorithm)
 3. Connect to APNs via HTTP/2
 4. Send notification to each device
@@ -35,8 +46,8 @@ APNS_KEY_ID=Z5X44X9KD7          # Key ID from Apple
 APNS_TEAM_ID=89NX9R78Y7         # Team ID from Apple
 APNS_TOPIC=com.tomos.app        # Bundle identifier
 APNS_ENVIRONMENT=development    # development or production
-APNS_AUTH_KEY=<.p8 contents>    # Full private key
-NOTION_DEVICE_TOKENS_DB_ID=     # Auto-created on first registration
+APNS_AUTH_KEY_BASE64=<base64>   # Base64-encoded .p8 key
+DATABASE_URL=<neon-postgres>    # PostgreSQL connection (for device_tokens table)
 ```
 
 ## JWT Token Generation
@@ -64,7 +75,7 @@ NOTION_DEVICE_TOKENS_DB_ID=     # Auto-created on first registration
     "badge": 1,
     "sound": "default"
   },
-  "task_id": "notion-page-id"
+  "task_id": "postgres-task-uuid"
 }
 ```
 

@@ -9,6 +9,24 @@ datasource db {
 }
 
 // ============================================
+// DEVICE TOKENS - APNs Push Notifications
+// ============================================
+model DeviceToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  platform  String   // ios, macos, ipados
+  bundleId  String?  @default("com.tomos.app")
+  name      String?  // Device name (e.g., "Tom's iPhone")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("device_tokens")
+  @@index([active])
+  @@index([platform])
+}
+
+// ============================================
 // PROJECTS
 // ============================================
 model Project {

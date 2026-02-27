@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Client } from "@notionhq/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
@@ -13,8 +12,6 @@ const UpdateTaskBody = z.object({
   parentId: z.string().nullable().optional(),
 });
 
-const USE_POSTGRES = process.env.USE_POSTGRES === "true";
-
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -22,49 +19,45 @@ export async function GET(
   try {
     const { id } = params;
 
-    if (USE_POSTGRES) {
-      const task = await prisma.task.findUnique({
-        where: { id },
-        include: {
-          tags: { include: { tag: true } },
-          children: {
-            include: {
-              tags: { include: { tag: true } },
-            },
-            orderBy: { createdAt: 'asc' },
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: {
+        tags: { include: { tag: true } },
+        children: {
+          include: {
+            tags: { include: { tag: true } },
           },
+          orderBy: { createdAt: 'asc' },
         },
-      });
+      },
+    });
 
-      if (!task) {
-        return NextResponse.json({ error: "Task not found" }, { status: 404 });
-      }
-
-      const formatTask = (t: any) => ({
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        status: t.status,
-        priority: t.priority,
-        dueDate: t.dueDate?.toISOString() || null,
-        completedAt: t.completedAt?.toISOString() || null,
-        parentId: t.parentId || null,
-        tags: t.tags?.map((tt: any) => tt.tag) || [],
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-      });
-
-      return NextResponse.json({
-        success: true,
-        task: {
-          ...formatTask(task),
-          subtasks: task.children.map(formatTask),
-          subtaskCount: task.children.length,
-        },
-      });
+    if (!task) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ error: "Not implemented for Notion" }, { status: 501 });
+    const formatTask = (t: any) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.dueDate?.toISOString() || null,
+      completedAt: t.completedAt?.toISOString() || null,
+      parentId: t.parentId || null,
+      tags: t.tags?.map((tt: any) => tt.tag) || [],
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
+    });
+
+    return NextResponse.json({
+      success: true,
+      task: {
+        ...formatTask(task),
+        subtasks: task.children.map(formatTask),
+        subtaskCount: task.children.length,
+      },
+    });
   } catch (error) {
     console.error("Error fetching task:", error);
     return NextResponse.json(
@@ -85,198 +78,124 @@ export async function PATCH(
     // Validate request body
     const validatedData = UpdateTaskBody.parse(body);
 
-    // NEW: Postgres implementation
-    if (USE_POSTGRES) {
-      // Map Notion values to Prisma values
-      const statusMap: Record<string, string> = {
-        'Inbox': 'todo',
-        'To Do': 'todo',
-        'In Progress': 'in_progress',
-        'Done': 'done',
-      };
+    // Map legacy status/priority values to Prisma values
+    const statusMap: Record<string, string> = {
+      'Inbox': 'todo',
+      'To Do': 'todo',
+      'In Progress': 'in_progress',
+      'Done': 'done',
+    };
 
-      const priorityMap: Record<string, string> = {
-        'Urgent': 'urgent',
-        'Important': 'high',
-        'Someday': 'low',
-      };
+    const priorityMap: Record<string, string> = {
+      'Urgent': 'urgent',
+      'Important': 'high',
+      'Someday': 'low',
+    };
 
-      // Build update data
-      const updateData: any = {};
-
-      if (validatedData.title !== undefined) {
-        updateData.title = validatedData.title;
-      }
-
-      if (validatedData.status !== undefined) {
-        updateData.status = statusMap[validatedData.status] || validatedData.status.toLowerCase();
-        // Set completedAt when marking as done
-        if (updateData.status === 'done') {
-          updateData.completedAt = new Date();
-        }
-      }
-
-      if (validatedData.priority !== undefined) {
-        updateData.priority = priorityMap[validatedData.priority] || 'medium';
-      }
-
-      if (validatedData.dueDate !== undefined) {
-        updateData.dueDate = validatedData.dueDate ? new Date(validatedData.dueDate) : null;
-      }
-
-      if (validatedData.parentId !== undefined) {
-        updateData.parentId = validatedData.parentId;
-      }
-
-      // Update task
-      const task = await prisma.task.update({
-        where: { id },
-        data: updateData,
-      });
-
-      // Handle context as tags
-      if (validatedData.context !== undefined) {
-        for (const contextValue of validatedData.context) {
-          const tag = await prisma.tag.upsert({
-            where: { name: `context:${contextValue}` },
-            update: {},
-            create: { name: `context:${contextValue}` },
-          });
-
-          await prisma.taskTag.upsert({
-            where: {
-              taskId_tagId: {
-                taskId: task.id,
-                tagId: tag.id,
-              },
-            },
-            update: {},
-            create: {
-              taskId: task.id,
-              tagId: tag.id,
-            },
-          });
-        }
-      }
-
-      // Handle tags
-      if (validatedData.tags !== undefined) {
-        // Remove existing tags
-        await prisma.taskTag.deleteMany({
-          where: {
-            taskId: task.id,
-            tag: {
-              name: {
-                notIn: validatedData.context?.map(c => `context:${c}`) || []
-              }
-            }
-          },
-        });
-
-        // Add new tags
-        for (const tagName of validatedData.tags) {
-          const tag = await prisma.tag.upsert({
-            where: { name: tagName },
-            update: {},
-            create: { name: tagName },
-          });
-
-          await prisma.taskTag.upsert({
-            where: {
-              taskId_tagId: {
-                taskId: task.id,
-                tagId: tag.id,
-              },
-            },
-            update: {},
-            create: {
-              taskId: task.id,
-              tagId: tag.id,
-            },
-          });
-        }
-      }
-
-      console.log(`✅ Updated Postgres task: ${task.id}`);
-
-      return NextResponse.json({
-        success: true,
-        taskId: task.id,
-        message: "Task updated successfully",
-        updated: validatedData,
-        source: 'postgres',
-      });
-    }
-
-    // OLD: Notion implementation (fallback)
-    if (!process.env.NOTION_API_KEY) {
-      return NextResponse.json(
-        { error: "NOTION_API_KEY is not configured" },
-        { status: 500 }
-      );
-    }
-
-    const notion = new Client({
-      auth: process.env.NOTION_API_KEY,
-    });
-
-    // Build properties object dynamically based on what's provided
-    const properties: any = {};
+    // Build update data
+    const updateData: any = {};
 
     if (validatedData.title !== undefined) {
-      properties.Task = {
-        title: [{ text: { content: validatedData.title } }],
-      };
+      updateData.title = validatedData.title;
     }
 
     if (validatedData.status !== undefined) {
-      properties.Status = {
-        select: { name: validatedData.status },
-      };
-    }
-
-    if (validatedData.priority !== undefined) {
-      properties.Priority = {
-        select: { name: validatedData.priority },
-      };
-    }
-
-    if (validatedData.context !== undefined) {
-      properties.Context = {
-        multi_select: validatedData.context.map(name => ({ name })),
-      };
-    }
-
-    if (validatedData.dueDate !== undefined) {
-      if (validatedData.dueDate === null) {
-        properties["Due Date"] = { date: null };
-      } else {
-        properties["Due Date"] = {
-          date: { start: validatedData.dueDate },
-        };
+      updateData.status = statusMap[validatedData.status] || validatedData.status.toLowerCase();
+      // Set completedAt when marking as done
+      if (updateData.status === 'done') {
+        updateData.completedAt = new Date();
       }
     }
 
-    if (validatedData.tags !== undefined) {
-      properties.Tags = {
-        multi_select: validatedData.tags.map(name => ({ name })),
-      };
+    if (validatedData.priority !== undefined) {
+      updateData.priority = priorityMap[validatedData.priority] || 'medium';
     }
 
-    // Update the task
-    const response = await notion.pages.update({
-      page_id: id,
-      properties,
+    if (validatedData.dueDate !== undefined) {
+      updateData.dueDate = validatedData.dueDate ? new Date(validatedData.dueDate) : null;
+    }
+
+    if (validatedData.parentId !== undefined) {
+      updateData.parentId = validatedData.parentId;
+    }
+
+    // Update task
+    const task = await prisma.task.update({
+      where: { id },
+      data: updateData,
     });
 
-    console.log(`✅ Updated Notion task: ${response.id}`);
+    // Handle context as tags
+    if (validatedData.context !== undefined) {
+      for (const contextValue of validatedData.context) {
+        const tag = await prisma.tag.upsert({
+          where: { name: `context:${contextValue}` },
+          update: {},
+          create: { name: `context:${contextValue}` },
+        });
+
+        await prisma.taskTag.upsert({
+          where: {
+            taskId_tagId: {
+              taskId: task.id,
+              tagId: tag.id,
+            },
+          },
+          update: {},
+          create: {
+            taskId: task.id,
+            tagId: tag.id,
+          },
+        });
+      }
+    }
+
+    // Handle tags
+    if (validatedData.tags !== undefined) {
+      // Remove existing tags
+      await prisma.taskTag.deleteMany({
+        where: {
+          taskId: task.id,
+          tag: {
+            name: {
+              notIn: validatedData.context?.map(c => `context:${c}`) || []
+            }
+          }
+        },
+      });
+
+      // Add new tags
+      for (const tagName of validatedData.tags) {
+        const tag = await prisma.tag.upsert({
+          where: { name: tagName },
+          update: {},
+          create: { name: tagName },
+        });
+
+        await prisma.taskTag.upsert({
+          where: {
+            taskId_tagId: {
+              taskId: task.id,
+              tagId: tag.id,
+            },
+          },
+          update: {},
+          create: {
+            taskId: task.id,
+            tagId: tag.id,
+          },
+        });
+      }
+    }
+
+    console.log(`Updated Postgres task: ${task.id}`);
 
     return NextResponse.json({
       success: true,
-      pageId: response.id,
+      taskId: task.id,
       message: "Task updated successfully",
       updated: validatedData,
-      source: 'notion',
+      source: 'postgres',
     });
   } catch (error) {
     console.error("Error updating task:", error);
