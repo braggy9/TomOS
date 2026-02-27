@@ -525,27 +525,29 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 
 ---
 
-## Current Status (Updated 2026-02-24)
+## Current Status (Updated 2026-02-27)
 
 ### Completed
-- iOS push notifications working (device registered)
-- macOS push notifications working (device registered)
+- iOS/macOS push notifications working (both devices registered)
 - **General Notes feature** — Full CRUD API with search and ecosystem integration
 - **Journal / Companion feature** — Entries, AI reflections, chat, insights, search, summaries
-- **TomOS Web Apps** — 4 Next.js apps in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
+- **FitnessOS** — Gym sessions, progressive overload, Strava sync, recovery check-ins
+- **TomOS Web Apps** — 5 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
   - Tasks: https://tomos-tasks.vercel.app
   - Notes: https://tomos-notes.vercel.app
   - Matters: https://tomos-matters.vercel.app
   - Journal: https://tomos-journal.vercel.app
-- ntfy fully deprecated and removed - all notifications via APNs
+  - Fitness: https://tomos-fitness.vercel.app
+- Swift/Xcode apps deprecated — PWAs are the canonical frontend
+- ntfy fully deprecated — all notifications via APNs
 - NLP task capture with smart date parsing (Sydney timezone)
 - 15-minute reminder notifications via APNs
 - Batch task import with AI parsing
-- GitHub Actions for scheduled notifications (fixed 2026-01-05)
 - Google Calendar sync (optional)
 - Automatic device deactivation on APNs 410 errors
-- **GET /api/all-tasks** - Task list endpoint for iOS app
-- **M365 Calendar** - 30-day window filter to prevent 413 errors
+- **Gym suggestion cron** — Scheduled via GitHub Actions at 6:30am Sydney
+- **Legal deadlines cron** — Scheduled via Vercel at 6am Sydney
+- **Phase 2 (2026-02-26):** Subtasks (parentId self-relation), smart linking expanded, work MBP docs
 
 ### Recent Fixes (2026-01-05)
 - **VERCEL_URL Fix:** Scheduled notifications (morning-overview, eod-summary) now use
@@ -744,88 +746,16 @@ GET /api/all-tasks
 
 Returns all tasks sorted by priority and due date, limited to 100 tasks.
 
-## Deployment
 
-### Deploy to Production
+## Cron Jobs
 
-```bash
-cd /Users/tombragg/Desktop/Projects/TomOS
+| Job | Trigger | Schedule | Purpose |
+|-----|---------|----------|---------|
+| `gym-suggestion` | GitHub Actions (`scheduled-notifications.yml`) | 6:30am Sydney (19:30 UTC) | Morning push with session type + suggested weights |
+| `legal-deadlines` | Vercel Cron (`vercel.json`) | 6am Sydney (19:00 UTC prev day) | Scans active matters for overdue/upcoming deadlines, legal-tagged tasks, stale matters (90d) |
 
-# Check changes
-git status
-
-# Commit
-git add .
-git commit -m "Description"
-git push
-
-# Deploy (or auto-deploys on push)
-vercel --prod
-```
-
-### Check Deployment Status
-
-```bash
-vercel logs --prod
-vercel inspect <deployment-url>
-```
-
-## Testing Endpoints
-
-```bash
-# Health check
-curl https://tomos-task-api.vercel.app/api/health
-
-# Send test push to all devices
-curl -X POST https://tomos-task-api.vercel.app/api/send-push \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Test","body":"APNs test","badge":1}'
-
-# Create task
-curl -X POST https://tomos-task-api.vercel.app/api/task \
-  -H "Content-Type: application/json" \
-  -d '{"task":"Test task urgent tomorrow"}'
-```
-
-## Database Schema
-
-### Tasks (Notion)
-
-**Properties:**
-- Task (title)
-- Context (multi_select): Work, Client Projects, Strategy, Admin, Legal Review
-- Priority (select): Urgent, Important, Someday
-- Due Date (date)
-- Status (select): Inbox, To Do, In Progress, Done
-- Energy (select): High, Medium, Low
-- Time (select): Quick, Short, Long
-- Source (select): Alfred, Batch Import, Email, etc.
-- Captured (date)
-
-### TomOS Device Tokens (Notion)
-
-**Properties:**
-- Device Token (title)
-- Platform (select): ios, macos, ipados
-- Bundle ID (rich_text)
-- App Version (rich_text)
-- Last Updated (date)
-- Active (checkbox)
-
-## User Context
-
-**User:** Tom Bragg
-**Timezone:** Australia/Sydney (AEDT, UTC+11)
-**Work Contexts:** Work, Client Projects, Strategy, Admin, Legal Review
-**ADHD Workflow:** Needs automatic task structuring, reliable notifications, minimal friction
-
-## Quick Reference
-
-**Need frontend changes?** Switch to `/Users/tombragg/Desktop/TomOS-Apps/`
-**Deployment failed?** Check Vercel logs and environment variables
-**APNs not working?** Verify .p8 key, device tokens in Notion, APNS_TOPIC=com.tomos.app
-**Rate limited?** JWT tokens cached 50min to avoid APNs limits
+Both endpoints also accept manual `POST` triggers for testing.
 
 ---
 
-*Last updated: 2026-01-01*
+*Last updated: 2026-02-27*
