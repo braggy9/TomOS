@@ -672,6 +672,11 @@ CRON_SECRET=xxx
 GOOGLE_CLIENT_ID=xxx
 GOOGLE_CLIENT_SECRET=xxx
 GOOGLE_CALENDAR_REFRESH_TOKEN=xxx
+
+# Resend (for inbound email → task/matter routing)
+# Get from https://resend.com/api-keys
+# Also configure inbound domain + webhook in Resend dashboard (see Email Inbound Route section)
+RESEND_API_KEY=re_xxx
 ```
 
 ## API Endpoints
@@ -772,7 +777,12 @@ Routing logic (checked in order):
 
 Returns: `{ success, route: "new_matter"|"matter_note"|"task", ... }`
 
-To wire up: configure Resend inbound forwarding webhook → `https://tomos-task-api.vercel.app/api/email/inbound`
+**Activation steps (one-time setup):**
+1. Add `RESEND_API_KEY` to Vercel environment variables (Settings → Environment Variables)
+2. In Resend dashboard → Domains → add/verify a domain (e.g. `inbound.tomos.app` or a subdomain of an existing verified domain)
+3. Resend dashboard → Inbound → Create inbound address (e.g. `tasks@inbound.tomos.app`)
+4. Set webhook endpoint: `https://tomos-task-api.vercel.app/api/email/inbound`
+5. Test: send an email with subject `MATTER: New vendor agreement` to your inbound address
 
 ## Deployment
 
