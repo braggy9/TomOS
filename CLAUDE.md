@@ -759,3 +759,36 @@ Both endpoints also accept manual `POST` triggers for testing.
 ---
 
 *Last updated: 2026-02-27*
+
+## Email Inbound Route
+
+**Endpoint:** `POST /api/email/inbound`
+**Integration:** Resend inbound webhook
+
+Routing logic (checked in order):
+1. Subject starts with `[MATTER]` or `MATTER:` → creates new matter via Prisma (type: advisory, status: active, client extracted from body)
+2. Subject contains `#PUB-XXXX` pattern → adds note to existing matter + bumps `lastActivityAt`
+3. Fallback → NLP task creation via `/api/task` (existing behaviour, Claude-parsed)
+
+Returns: `{ success, route: "new_matter"|"matter_note"|"task", ... }`
+
+To wire up: configure Resend inbound forwarding webhook → `https://tomos-task-api.vercel.app/api/email/inbound`
+
+## Deployment
+
+**IMPORTANT: iCloud Drive "Optimize Mac Storage" evicts project files, breaking git and Vercel CLI.**
+
+Workaround — clone to `/tmp` and deploy from there:
+```bash
+cd /tmp && git clone git@github.com:braggy9/TomOS.git tomos-fresh
+# Copy changed files in, then:
+cd /tmp/tomos-fresh && git add . && git commit -m "..." && git push
+# Link to existing project (NOT new one) before deploying:
+vercel link --project tomos-task-api --yes && vercel --prod --yes
+```
+
+Permanent fix: right-click `~/Desktop/Projects` in Finder → **Keep Downloaded**
+
+SSH key: `~/.ssh/id_ed25519` — load with `ssh-add ~/.ssh/id_ed25519` if git push fails.
+
+*Last updated: 2026-03-02*
