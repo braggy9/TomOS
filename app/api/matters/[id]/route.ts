@@ -98,6 +98,8 @@ export async function PATCH(
     if (body.practiceArea !== undefined) updateData.practiceArea = body.practiceArea;
     if (body.jurisdiction !== undefined) updateData.jurisdiction = body.jurisdiction;
     if (body.tags !== undefined) updateData.tags = body.tags;
+    if (body.counterparty !== undefined) updateData.counterparty = body.counterparty;
+    if (body.counterpartyContact !== undefined) updateData.counterpartyContact = body.counterpartyContact;
 
     // Handle status change
     if (body.status !== undefined && body.status !== existing.status) {

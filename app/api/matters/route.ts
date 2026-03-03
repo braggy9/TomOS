@@ -113,6 +113,8 @@ export async function POST(request: NextRequest) {
         practiceArea: body.practiceArea || null,
         jurisdiction: body.jurisdiction || null,
         tags: body.tags || [],
+        counterparty: body.counterparty || null,
+        counterpartyContact: body.counterpartyContact || null,
       },
       include: {
         _count: {
