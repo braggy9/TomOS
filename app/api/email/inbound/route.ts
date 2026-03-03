@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma'
  */
 
 const MATTER_NUMBER_RE = /#([A-Z]{2,6}-\d{4}-\d{3,})/i
+const MATTER_NAME_RE = /#([^#\n]{3,60})/
 const MATTER_PREFIX_RE = /^\[?MATTER\]?:?\s*/i
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -106,12 +107,18 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Route 2: Note on existing matter ──────────────────────────────────────
+  // Supports both number (#PUB-2026-001) and fuzzy name (#Acme NDA) formats
   const matterNumberMatch = cleanSubject.match(MATTER_NUMBER_RE)
-  if (matterNumberMatch) {
-    const matterNumber = matterNumberMatch[1].toUpperCase()
+  const matterNameMatch = !matterNumberMatch && cleanSubject.match(MATTER_NAME_RE)
+  const matterRef = matterNumberMatch?.[1] || matterNameMatch?.[1]
 
+  if (matterRef) {
+    // First try exact matter number match, then fuzzy title search
     const matter = await prisma.matter.findFirst({
-      where: { matterNumber: { equals: matterNumber, mode: 'insensitive' } },
+      where: matterNumberMatch
+        ? { matterNumber: { equals: matterRef.toUpperCase(), mode: 'insensitive' } }
+        : { title: { contains: matterRef.trim(), mode: 'insensitive' } },
+      orderBy: { lastActivityAt: 'desc' },
     })
 
     if (matter) {
@@ -142,7 +149,7 @@ export async function POST(request: NextRequest) {
         noteId: note.id,
       })
     }
-    // Matter number not found — fall through to task creation
+    // Matter ref not found — fall through to task creation
   }
 
   // ── Route 3: Task (default) ────────────────────────────────────────────────
