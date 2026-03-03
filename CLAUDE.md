@@ -768,21 +768,31 @@ Both endpoints also accept manual `POST` triggers for testing.
 ## Email Inbound Route
 
 **Endpoint:** `POST /api/email/inbound`
-**Integration:** Resend inbound webhook
+**Email address:** `tasks@tomos.run` (any `*@tomos.run` works)
+**Infrastructure:** Cloudflare Email Routing → Cloudflare Worker (`tomos-email-inbound`) → this endpoint
 
 Routing logic (checked in order):
-1. Subject starts with `[MATTER]` or `MATTER:` → creates new matter via Prisma (type: advisory, status: active, client extracted from body)
-2. Subject contains `#PUB-XXXX` pattern → adds note to existing matter + bumps `lastActivityAt`
-3. Fallback → NLP task creation via `/api/task` (existing behaviour, Claude-parsed)
+1. Subject starts with `[MATTER]` or `MATTER:` → creates new matter (type: advisory, client guessed from body)
+2. Subject contains `#PUB-XXXX` (matter number) → note on existing matter + bumps `lastActivityAt`
+3. Subject contains `#some name` (fuzzy title search) → note on best-matching matter
+4. Fallback → NLP task creation via `/api/task` (Claude-parsed — extracts date, priority, context)
 
 Returns: `{ success, route: "new_matter"|"matter_note"|"task", ... }`
 
-**Activation steps (one-time setup):**
-1. Add `RESEND_API_KEY` to Vercel environment variables (Settings → Environment Variables)
-2. In Resend dashboard → Domains → add/verify a domain (e.g. `inbound.tomos.app` or a subdomain of an existing verified domain)
-3. Resend dashboard → Inbound → Create inbound address (e.g. `tasks@inbound.tomos.app`)
-4. Set webhook endpoint: `https://tomos-task-api.vercel.app/api/email/inbound`
-5. Test: send an email with subject `MATTER: New vendor agreement` to your inbound address
+**Infrastructure (fully configured — no further setup needed):**
+- Domain `tomos.run` on Cloudflare, Email Routing enabled
+- MX: `route1/2/3.mx.cloudflare.net`
+- Cloudflare Worker `tomos-email-inbound` handles catch-all and POSTs to this endpoint
+- `RESEND_API_KEY` set in Vercel env (available for outbound sending if needed)
+
+**Usage examples:**
+```
+To: tasks@tomos.run
+Subject: Review vendor contract by Friday urgent     → task (Claude-parsed)
+Subject: MATTER: Acme Corp Software License          → new matter
+Subject: #Acme NDA follow-up from today's call       → note on Acme NDA matter
+Subject: #PUB-2026-001 counterparty responded        → note on matter by number
+```
 
 ## Deployment
 
