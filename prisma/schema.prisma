@@ -147,9 +147,13 @@ model Matter {
   externalCounsel String[] // External law firms
 
   // Organization
-  practiceArea   String?  // Commercial, IP, Employment, Regulatory, etc.
-  jurisdiction   String?  // NSW, VIC, Commonwealth, International
-  tags           String[]
+  practiceArea        String?  // Category — Commercial, IP, Employment, Regulatory, etc.
+  jurisdiction        String?  // NSW, VIC, QLD, WA, SA, ACT, NT, TAS, Commonwealth, Federal Court, International, etc.
+  tags                String[]
+
+  // Counterparty (other side of the matter)
+  counterparty        String?  // Other party name — e.g. "Accenture", "Jane Smith (former employee)"
+  counterpartyContact String?  // Their key contact or lawyer
 
   // Relations
   tasks          Task[]
