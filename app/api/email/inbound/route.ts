@@ -109,8 +109,8 @@ export async function POST(request: NextRequest) {
   // ── Route 2: Note on existing matter ──────────────────────────────────────
   // Supports both number (#PUB-2026-001) and fuzzy name (#Acme NDA) formats
   const matterNumberMatch = cleanSubject.match(MATTER_NUMBER_RE)
-  const matterNameMatch = !matterNumberMatch && cleanSubject.match(MATTER_NAME_RE)
-  const matterRef = matterNumberMatch?.[1] || matterNameMatch?.[1]
+  const matterNameMatch = matterNumberMatch ? null : cleanSubject.match(MATTER_NAME_RE)
+  const matterRef = matterNumberMatch?.[1] ?? matterNameMatch?.[1]
 
   if (matterRef) {
     // First try exact matter number match, then fuzzy title search
