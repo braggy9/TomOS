@@ -17,8 +17,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch last 30 days of activities
-    const after = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60
+    // Accept ?days= parameter (default 90, max 365)
+    const daysParam = parseInt(request.nextUrl.searchParams.get('days') || '90')
+    const days = Math.min(Math.max(daysParam, 1), 365)
+    const after = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
     const params = new URLSearchParams({
       after: String(after),
       per_page: '100',
