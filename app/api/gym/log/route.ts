@@ -20,7 +20,7 @@ import { createGymTask, completeGymTask } from '@/lib/fitness/task-sync'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sessionType, weekType, notes, overallRPE, exercises } = body
+    const { sessionType, weekType, notes, overallRPE, moodPost, exercises } = body
 
     if (!sessionType || !exercises || !Array.isArray(exercises) || exercises.length === 0) {
       return NextResponse.json(
@@ -57,6 +57,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Auto-find today's recovery check-in (Sydney timezone)
+    let recoveryId: string | null = null
+    try {
+      const now = new Date()
+      const sydneyDate = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }))
+      const startOfDay = new Date(sydneyDate)
+      startOfDay.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(sydneyDate)
+      endOfDay.setHours(23, 59, 59, 999)
+      const todayRecovery = await prisma.recoveryCheckIn.findFirst({
+        where: { date: { gte: startOfDay, lte: endOfDay } },
+        orderBy: { date: 'desc' },
+      })
+      recoveryId = todayRecovery?.id ?? null
+    } catch { /* non-critical */ }
+
     // Create the session with all exercises and sets
     const session = await prisma.gymSession.create({
       data: {
@@ -65,6 +81,8 @@ export async function POST(request: NextRequest) {
         weekType: weekType || null,
         notes: notes || null,
         overallRPE: overallRPE || null,
+        moodPost: moodPost ?? null,
+        recoveryId,
         completedAt: new Date(),
         sessionExercises: {
           create: exercises.map((ex: any, index: number) => {

@@ -74,7 +74,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, skipped: 'Not a run' })
     }
 
-    // Upsert into running_sync
+    // Parse splits from Strava splits_metric
+    const splits = activity.splits_metric?.map((s: any, i: number) => ({
+      km: i + 1,
+      timeSec: s.elapsed_time || s.moving_time || 0,
+      avgHR: s.average_heartrate || null,
+      avgPace: s.moving_time && s.distance ? Math.round((s.moving_time / 60) / (s.distance / 1000) * 100) / 100 : null,
+      elevation: s.elevation_difference || 0,
+    })) || null
+
+    // Upsert into running_sync with extended fields
     const runningSync = await prisma.runningSync.upsert({
       where: { externalId: String(activityId) },
       create: {
@@ -88,6 +97,13 @@ export async function POST(request: NextRequest) {
         avgHeartRate: activity.average_heartrate || null,
         elevationGain: activity.total_elevation_gain || null,
         trainingLoad: calculateTrainingLoad(activity),
+        maxHeartRate: activity.max_heartrate || null,
+        avgCadence: activity.average_cadence ? activity.average_cadence * 2 : null,
+        calories: activity.calories || null,
+        activityName: activity.name || null,
+        description: activity.description || null,
+        sufferScore: activity.suffer_score || null,
+        splits: splits,
       },
       update: {
         date: new Date(activity.start_date),
@@ -98,10 +114,48 @@ export async function POST(request: NextRequest) {
         avgHeartRate: activity.average_heartrate || null,
         elevationGain: activity.total_elevation_gain || null,
         trainingLoad: calculateTrainingLoad(activity),
+        maxHeartRate: activity.max_heartrate || null,
+        avgCadence: activity.average_cadence ? activity.average_cadence * 2 : null,
+        calories: activity.calories || null,
+        activityName: activity.name || null,
+        description: activity.description || null,
+        sufferScore: activity.suffer_score || null,
+        splits: splits,
       },
     })
 
-    return NextResponse.json({ received: true, synced: runningSync.id })
+    // Auto-reconcile: try to match this run to a planned session
+    const activityDate = new Date(activity.start_date)
+    const activityDayOfWeek = activityDate.getDay() === 0 ? 7 : activityDate.getDay()
+
+    const planned = await prisma.plannedSession.findFirst({
+      where: {
+        status: 'planned',
+        linkedRunId: null,
+        dayOfWeek: activityDayOfWeek,
+        week: {
+          startDate: { lte: activityDate },
+          block: { status: 'active' },
+        },
+      },
+      orderBy: { week: { startDate: 'desc' } },
+    })
+
+    if (planned) {
+      await prisma.plannedSession.update({
+        where: { id: planned.id },
+        data: {
+          linkedRunId: runningSync.id,
+          status: 'completed',
+        },
+      })
+    }
+
+    return NextResponse.json({
+      received: true,
+      synced: runningSync.id,
+      matchedPlannedSession: planned?.id ?? null,
+    })
   } catch (error) {
     console.error('Error processing Strava webhook:', error)
     return NextResponse.json({ received: true, error: 'Processing failed' })

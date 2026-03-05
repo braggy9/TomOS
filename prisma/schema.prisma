@@ -316,11 +316,15 @@ model GymSession {
   overallRPE      Int?      // 1-10
   weekType        String?   // "kid" or "non-kid"
   completedAt     DateTime?
+  moodPost        Int?      // 1-5 post-session mood
+  recoveryId      String?   // FK → RecoveryCheckIn
 
   // Relations
   taskId          String?
   task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  recovery        RecoveryCheckIn? @relation(fields: [recoveryId], references: [id], onDelete: SetNull)
   sessionExercises SessionExercise[]
+  plannedSession  PlannedSession?
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -402,6 +406,21 @@ model RunningSync {
   elevationGain   Float?   // meters
   trainingLoad    Float?   // Calculated load score
 
+  // Extended Strava fields
+  maxHeartRate    Int?
+  avgCadence      Float?
+  calories        Int?
+  activityName    String?  @db.Text
+  description     String?  @db.Text
+  splits          Json?    // [{km, timeSec, avgHR, avgPace, elevation}]
+  sufferScore     Int?
+  streamsCache    Json?    // Cached Strava streams data
+  streamsCachedAt DateTime?
+
+  // Reverse relations
+  plannedSession  PlannedSession?
+  runSession      RunSession?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -421,6 +440,10 @@ model RecoveryCheckIn {
   notes           String?
   readinessScore  Float?   // Computed average
   createdAt       DateTime @default(now())
+
+  // Reverse relations
+  runSessions     RunSession[]
+  gymSessions     GymSession[]
 
   @@map("recovery_checkins")
   @@index([date])
@@ -449,6 +472,152 @@ model StravaToken {
   updatedAt     DateTime @updatedAt
 
   @@map("strava_tokens")
+}
+
+// ============================================
+// USER SETTINGS — Singleton fitness preferences
+// ============================================
+
+model UserSettings {
+  id              String  @id @default("singleton")
+  maxHeartRate    Int     @default(192)
+  restingHR       Int?
+  defaultWeekType String  @default("non-kid")
+
+  @@map("user_settings")
+}
+
+// ============================================
+// RUN SESSION — Subjective data per run
+// ============================================
+
+model RunSession {
+  id                  String   @id @default(uuid())
+  runningSyncId       String   @unique
+  rpe                 Int?     // 1-10
+  moodPost            Int?     // 1-5
+  sessionTypeOverride String?
+  notes               String?  @db.Text
+  recoveryId          String?
+
+  // Relations
+  runningSync         RunningSync    @relation(fields: [runningSyncId], references: [id], onDelete: Cascade)
+  recovery            RecoveryCheckIn? @relation(fields: [recoveryId], references: [id], onDelete: SetNull)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("run_sessions")
+  @@index([runningSyncId])
+}
+
+// ============================================
+// GARMIN — Stubs for future integration
+// ============================================
+
+model GarminToken {
+  id                String  @id @default("singleton")
+  accessToken       String?
+  accessTokenSecret String?
+  userId            String?
+
+  @@map("garmin_tokens")
+}
+
+model GarminWorkout {
+  id            String    @id @default(uuid())
+  externalId    String    @unique
+  name          String
+  type          String
+  scheduledDate DateTime?
+  steps         Json?
+  description   String?   @db.Text
+  status        String    @default("pending")
+
+  @@map("garmin_workouts")
+}
+
+// ============================================
+// TRAINING PLAN — Periodised Training Structure
+// ============================================
+
+model TrainingBlock {
+  id              String   @id @default(uuid())
+  name            String   // "Rebuild Phase", "Base Building", "GC Marathon Specific", "Taper"
+  phase           String   // rebuild, base, build, specific, taper, race, recovery
+  startDate       DateTime
+  endDate         DateTime
+  targetWeeklyKm  Float?   // Target weekly running volume
+  notes           String?  @db.Text
+  status          String   @default("planned") // planned, active, completed
+
+  // Relations
+  weeks           TrainingWeek[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("training_blocks")
+  @@index([status])
+  @@index([startDate])
+}
+
+model TrainingWeek {
+  id          String   @id @default(uuid())
+  blockId     String
+  weekNumber  Int      // Week number within the block (1, 2, 3...)
+  startDate   DateTime // Monday of this week
+  targetKm    Float?   // Target total running km
+  actualKm    Float?   // Populated from RunningSync after the week
+  keyFocus    String?  // "rebuild easy volume", "introduce tempo", "long run to 16km"
+  weekType    String?  // "kid", "non-kid", null (set dynamically each week)
+  notes       String?  @db.Text
+  status      String   @default("planned") // planned, active, completed, deload
+
+  // Relations
+  block       TrainingBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  sessions    PlannedSession[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("training_weeks")
+  @@index([blockId])
+  @@index([startDate])
+  @@index([status])
+}
+
+model PlannedSession {
+  id              String   @id @default(uuid())
+  weekId          String
+  dayOfWeek       Int      // 1=Mon, 2=Tue, ..., 7=Sun
+  sessionType     String   // easy, long, tempo, intervals, hills, time_trial, progressive, bft, metcon, rest, ocean, flex
+  targetDistanceKm Float?  // null for BFT/metcon/rest
+  targetPaceZone  String?  // "easy", "moderate", "tempo", "threshold", "interval", null
+  sessionName     String?  // "8km Tempo 2-1-1", "Hill Repeats", "BFT", "AMRAP 15"
+  notes           String?  @db.Text
+  isOptional      Boolean  @default(false) // true = can skip without guilt
+  isKidWeekOnly   Boolean  @default(false) // session structure changes for kid weeks
+  isNonKidOnly    Boolean  @default(false) // extra sessions in non-kid weeks
+
+  // Completion linking
+  linkedRunId         String?  @unique // → RunningSync.id (matched after Strava sync)
+  linkedGymSessionId  String?  @unique // → GymSession.id (for BFT/metcon days)
+  status              String   @default("planned") // planned, completed, modified, skipped, minimum_dose
+
+  // Relations
+  week            TrainingWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  linkedRun       RunningSync? @relation(fields: [linkedRunId], references: [id], onDelete: SetNull)
+  linkedGymSession GymSession? @relation(fields: [linkedGymSessionId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("planned_sessions")
+  @@index([weekId])
+  @@index([dayOfWeek])
+  @@index([status])
+  @@index([sessionType])
 }
 
 // ============================================

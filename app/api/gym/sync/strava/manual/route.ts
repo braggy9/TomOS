@@ -47,10 +47,37 @@ export async function POST(request: NextRequest) {
 
     let synced = 0
     let skipped = 0
+    let enriched = 0
 
     for (const activity of runs) {
       // Classify run type by name patterns first, fall back to metrics
       const runType = classifyRunTypeByName(activity.name) || classifyRunType(activity)
+
+      // Fetch individual activity details for richer data (splits, max HR, etc.)
+      let detail = null
+      try {
+        const detailRes = await fetch(
+          `https://www.strava.com/api/v3/activities/${activity.id}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        )
+        if (detailRes.ok) {
+          detail = await detailRes.json()
+          enriched++
+        }
+      } catch {
+        // Non-critical — continue with summary data
+      }
+
+      const source = detail || activity
+
+      // Parse splits from detailed activity
+      const splits = detail?.splits_metric?.map((s: any, i: number) => ({
+        km: i + 1,
+        timeSec: s.elapsed_time || s.moving_time || 0,
+        avgHR: s.average_heartrate || null,
+        avgPace: s.moving_time && s.distance ? Math.round((s.moving_time / 60) / (s.distance / 1000) * 100) / 100 : null,
+        elevation: s.elevation_difference || 0,
+      })) || null
 
       try {
         await prisma.runningSync.upsert({
@@ -66,6 +93,13 @@ export async function POST(request: NextRequest) {
             avgHeartRate: activity.average_heartrate || null,
             elevationGain: activity.total_elevation_gain || null,
             trainingLoad: calculateTrainingLoad(activity),
+            maxHeartRate: source.max_heartrate || null,
+            avgCadence: source.average_cadence ? source.average_cadence * 2 : null,
+            calories: source.calories || null,
+            activityName: source.name || null,
+            description: source.description || null,
+            sufferScore: source.suffer_score || null,
+            splits,
           },
           update: {
             date: new Date(activity.start_date),
@@ -76,6 +110,13 @@ export async function POST(request: NextRequest) {
             avgHeartRate: activity.average_heartrate || null,
             elevationGain: activity.total_elevation_gain || null,
             trainingLoad: calculateTrainingLoad(activity),
+            maxHeartRate: source.max_heartrate || null,
+            avgCadence: source.average_cadence ? source.average_cadence * 2 : null,
+            calories: source.calories || null,
+            activityName: source.name || null,
+            description: source.description || null,
+            sufferScore: source.suffer_score || null,
+            splits,
           },
         })
         synced++
@@ -90,6 +131,7 @@ export async function POST(request: NextRequest) {
       data: {
         synced,
         skipped,
+        enriched,
         totalActivities: activities.length,
         runsFound: runs.length,
       },
