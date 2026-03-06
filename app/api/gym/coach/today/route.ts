@@ -4,17 +4,14 @@ import { getSydneyToday } from '@/lib/sydney-time'
 
 /**
  * GET /api/gym/coach/today
- * Today's snapshot — run, recovery, prescription, and planned session.
+ * Today's snapshot — run, recovery, and coach prescription.
+ * Coach prescriptions are the sole source of daily session guidance.
  */
 export async function GET() {
   try {
-    const { startOfDay, endOfDay, dateStr, sydneyDate } = getSydneyToday()
+    const { startOfDay, endOfDay, dateStr } = getSydneyToday()
 
-    // dayOfWeek: 1=Mon ... 7=Sun
-    const jsDay = sydneyDate.getUTCDay()
-    const todayDayOfWeek = jsDay === 0 ? 7 : jsDay
-
-    const [todayRun, todayRecovery, todayPrescription, currentWeek] = await Promise.all([
+    const [todayRun, todayRecovery, todayPrescription] = await Promise.all([
       prisma.runningSync.findFirst({
         where: { date: { gte: startOfDay, lte: endOfDay } },
         include: { runSession: true },
@@ -28,43 +25,7 @@ export async function GET() {
         where: { date: { gte: startOfDay, lte: endOfDay } },
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.trainingWeek.findFirst({
-        where: {
-          startDate: { lte: endOfDay },
-          block: { status: 'active' },
-        },
-        include: {
-          sessions: {
-            where: { dayOfWeek: todayDayOfWeek },
-            include: {
-              linkedRun: { select: { id: true, distance: true, type: true } },
-            },
-          },
-        },
-        orderBy: { startDate: 'desc' },
-      }),
     ])
-
-    // Filter planned session by week type
-    let plannedSession = null
-    if (currentWeek && currentWeek.sessions.length > 0) {
-      const applicable = currentWeek.sessions.filter(s => {
-        if (currentWeek.weekType === 'kid') return !s.isNonKidOnly
-        if (currentWeek.weekType === 'non-kid') return !s.isKidWeekOnly
-        return true
-      })
-      if (applicable.length > 0) {
-        const s = applicable[0]
-        plannedSession = {
-          sessionType: s.sessionType,
-          targetDistanceKm: s.targetDistanceKm,
-          sessionName: s.sessionName,
-          targetPaceZone: s.targetPaceZone,
-          notes: s.notes,
-          status: s.status,
-        }
-      }
-    }
 
     return NextResponse.json({
       success: true,
@@ -94,7 +55,6 @@ export async function GET() {
               notes: todayPrescription.notes,
             }
           : null,
-        plannedSession,
       },
     })
   } catch (error) {
