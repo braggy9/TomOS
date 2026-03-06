@@ -36,12 +36,24 @@ export async function GET(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    const statusMap: Record<string, string> = {
+      'todo': 'Inbox',
+      'in_progress': 'In Progress',
+      'done': 'Done',
+    };
+    const priorityMap: Record<string, string> = {
+      'urgent': 'Urgent',
+      'high': 'Important',
+      'medium': 'Important',
+      'low': 'Someday',
+    };
+
     const formatTask = (t: any) => ({
       id: t.id,
       title: t.title,
       description: t.description,
-      status: t.status,
-      priority: t.priority,
+      status: statusMap[t.status] ?? t.status,
+      priority: priorityMap[t.priority] ?? t.priority,
       dueDate: t.dueDate?.toISOString() || null,
       completedAt: t.completedAt?.toISOString() || null,
       parentId: t.parentId || null,

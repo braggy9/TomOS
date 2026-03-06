@@ -36,12 +36,24 @@ export async function GET() {
       take: 100,
     });
 
+    const statusMap: Record<string, string> = {
+      'todo': 'Inbox',
+      'in_progress': 'In Progress',
+      'done': 'Done',
+    };
+    const priorityMap: Record<string, string> = {
+      'urgent': 'Urgent',
+      'high': 'Important',
+      'medium': 'Important',
+      'low': 'Someday',
+    };
+
     const formattedTasks = tasks.map((task: any) => ({
       id: task.id,
       title: task.title,
       description: task.description,
-      status: task.status,
-      priority: task.priority,
+      status: statusMap[task.status] ?? task.status,
+      priority: priorityMap[task.priority] ?? task.priority,
       dueDate: task.dueDate?.toISOString() || null,
       completedAt: task.completedAt?.toISOString() || null,
       parentId: task.parentId || null,
