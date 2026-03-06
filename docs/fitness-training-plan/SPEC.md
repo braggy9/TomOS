@@ -751,10 +751,10 @@ As of 4 March 2026:
 
 ## 13. Open Questions for Tom
 
-- [ ] **Race confirmed?** Gold Coast Marathon 4-5 Jul 2026 — is a ticket secured?
-- [ ] **BFT schedule:** What days/times are BFT sessions? Need to lock Mon/Wed/other.
-- [ ] **Kid week schedule:** Which weeks in the next 4 months are kid weeks? Can build into the plan.
-- [ ] **Trail race timing:** When in 2026 is the trail ultra target? This affects whether we plan a second build cycle after GC or maintain a base between them.
+- [ ] **Race confirmed?** Gold Coast Marathon 4-5 Jul 2026 — hunting for ticket, NOT yet secured. Plan as primary target but have a backup marathon in mind.
+- [x] **BFT schedule:** Flexible. Kid weeks: Tue/Thu lunch or early afternoon (before school pickup). Non-kid weeks: open.
+- [x] **Kid week schedule:** Fortnightly, runs Friday to Friday. Tom's week ends Friday, next kid week starts the following Friday. Seed weeks dynamically — the weekType toggle handles this.
+- [ ] **Trail race timing:** Kosi 50km is the dream. Need to research 2026 race calendar for timing. Likely second half of 2026 (post-GC recovery + trail build cycle).
 - [ ] **Running routes:** Any preferred routes for different session types? (Maroubra coastal for easy, hills for repeats, etc.)
 
 ---

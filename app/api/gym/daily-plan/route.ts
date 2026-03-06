@@ -23,8 +23,9 @@ export async function GET(request: NextRequest) {
     tomorrow.setDate(tomorrow.getDate() + 1)
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const todayDayOfWeek = today.getDay() === 0 ? 7 : today.getDay()
 
-    const [suggestion, runningContext, todayRecovery, recentNutrition, weekSessions] =
+    const [suggestion, runningContext, todayRecovery, recentNutrition, weekSessions, currentWeek] =
       await Promise.all([
         getSessionSuggestion(weekType, equipment),
         getRunningLoadContext(),
@@ -38,6 +39,14 @@ export async function GET(request: NextRequest) {
         }),
         prisma.gymSession.count({
           where: { date: { gte: sevenDaysAgo } },
+        }),
+        prisma.trainingWeek.findFirst({
+          where: {
+            startDate: { lte: today },
+            block: { status: 'active' },
+          },
+          include: { sessions: true, block: true },
+          orderBy: { startDate: 'desc' },
         }),
       ])
 
@@ -92,6 +101,44 @@ export async function GET(request: NextRequest) {
       `Running load ${runningContext.loadFactor}`,
     ]
 
+    // Build training plan context if active plan exists
+    let trainingPlan = null
+    if (currentWeek) {
+      let todaysPlannedSessions = currentWeek.sessions.filter(
+        s => s.dayOfWeek === todayDayOfWeek && s.status === 'planned'
+      )
+      // Filter by week type
+      if (currentWeek.weekType === 'kid') {
+        todaysPlannedSessions = todaysPlannedSessions.filter(s => !s.isNonKidOnly)
+      } else if (currentWeek.weekType === 'non-kid') {
+        todaysPlannedSessions = todaysPlannedSessions.filter(s => !s.isKidWeekOnly)
+      }
+
+      const todaysSession = todaysPlannedSessions[0] ?? null
+
+      trainingPlan = {
+        block: currentWeek.block.name,
+        phase: currentWeek.block.phase,
+        weekNumber: currentWeek.weekNumber,
+        targetKm: currentWeek.targetKm,
+        todaysSession: todaysSession ? {
+          id: todaysSession.id,
+          type: todaysSession.sessionType,
+          name: todaysSession.sessionName,
+          distance: todaysSession.targetDistanceKm,
+          pace: todaysSession.targetPaceZone,
+          notes: todaysSession.notes,
+          isOptional: todaysSession.isOptional,
+        } : null,
+        weekProgress: {
+          planned: currentWeek.sessions.length,
+          completed: currentWeek.sessions.filter(s => s.status === 'completed' || s.status === 'minimum_dose').length,
+          targetKm: currentWeek.targetKm,
+          actualKm: currentWeek.actualKm,
+        },
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -101,6 +148,7 @@ export async function GET(request: NextRequest) {
         recoveryScore,
         nutritionNudge,
         runningContext,
+        trainingPlan,
         context: contextParts.join(', '),
       },
     })

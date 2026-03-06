@@ -22,16 +22,32 @@ const SESSION_TEMPLATES: Record<string, { name: string; day: string; exercisePat
   },
 }
 
+// WOD template type
+interface WodTemplate {
+  name: string
+  format: 'amrap' | 'emom' | 'fortime' | 'tabata'
+  duration: number | null
+  description: string
+  slots: number // 0 = fixed workout, don't randomize
+  defaultReps: number[]
+  requiresEquipment: string[]
+  isNamed?: boolean
+  isHero?: boolean
+  fixedExercises?: string[]
+  notes?: string
+}
+
 // WOD templates — pick one based on available equipment
-const WOD_TEMPLATES = [
+const WOD_TEMPLATES: WodTemplate[] = [
+  // --- Randomized templates ---
   {
     name: 'AMRAP 15',
     format: 'amrap',
     duration: 15,
     description: 'As many rounds as possible in 15 minutes',
-    slots: 3, // number of exercises to pick
+    slots: 3,
     defaultReps: [10, 15, 20],
-    requiresEquipment: [] as string[],
+    requiresEquipment: [],
   },
   {
     name: 'EMOM 20',
@@ -57,7 +73,7 @@ const WOD_TEMPLATES = [
     duration: 16,
     description: '4 movements, 4 minutes each (20s work / 10s rest x 8)',
     slots: 4,
-    defaultReps: [0], // time-based
+    defaultReps: [0],
     requiresEquipment: [],
   },
   {
@@ -68,6 +84,108 @@ const WOD_TEMPLATES = [
     slots: 3,
     defaultReps: [10, 12, 15],
     requiresEquipment: [],
+  },
+
+  // --- Named workouts ---
+  {
+    name: 'Cindy',
+    format: 'amrap',
+    duration: 20,
+    description: 'AMRAP 20: 5 Pull-ups, 10 Push-ups, 15 Air Squats',
+    slots: 0,
+    defaultReps: [5, 10, 15],
+    requiresEquipment: ['pull_up_bar'],
+    isNamed: true,
+    fixedExercises: ['Pull-up', 'Burpee', 'Goblet Squat'],
+  },
+  {
+    name: 'Helen',
+    format: 'fortime',
+    duration: null,
+    description: '3 Rounds: 400m Run, 21 KB Swings, 12 Pull-ups',
+    slots: 0,
+    defaultReps: [1, 21, 12],
+    requiresEquipment: ['kettlebell', 'pull_up_bar'],
+    isNamed: true,
+    fixedExercises: ['KB Swing', 'Pull-up'],
+  },
+  {
+    name: 'Murph',
+    format: 'fortime',
+    duration: null,
+    description: '1 mile Run, 100 Pull-ups, 200 Push-ups, 300 Squats, 1 mile Run. Partition as needed.',
+    slots: 0,
+    defaultReps: [100, 200, 300],
+    requiresEquipment: ['pull_up_bar'],
+    isNamed: true,
+    isHero: true,
+    fixedExercises: ['Pull-up', 'Burpee', 'Goblet Squat'],
+    notes: 'Scale: Half Murph (halve everything). With vest if available.',
+  },
+  {
+    name: 'DT',
+    format: 'fortime',
+    duration: null,
+    description: '5 Rounds: 12 Deadlifts, 9 Hang Power Cleans, 6 Push Jerks (70/47.5kg)',
+    slots: 0,
+    defaultReps: [12, 9, 6],
+    requiresEquipment: ['barbell'],
+    isNamed: true,
+    isHero: true,
+  },
+  {
+    name: 'Fran',
+    format: 'fortime',
+    duration: null,
+    description: '21-15-9: Thrusters (43/30kg), Pull-ups',
+    slots: 0,
+    defaultReps: [21, 15, 9],
+    requiresEquipment: ['barbell', 'pull_up_bar'],
+    isNamed: true,
+  },
+  {
+    name: 'Grace',
+    format: 'fortime',
+    duration: null,
+    description: '30 Clean & Jerks for time (60/43kg)',
+    slots: 0,
+    defaultReps: [30],
+    requiresEquipment: ['barbell'],
+    isNamed: true,
+  },
+  {
+    name: 'Filthy Fifty',
+    format: 'fortime',
+    duration: null,
+    description: '50 Box Jumps, 50 Jumping Pull-ups, 50 KB Swings, 50 Walking Lunges, 50 Knees-to-Elbows, 50 Push Press, 50 Back Extensions, 50 Wall Balls, 50 Burpees, 50 Double Unders',
+    slots: 0,
+    defaultReps: [50],
+    requiresEquipment: ['box', 'kettlebell', 'barbell', 'medicine_ball', 'jump_rope'],
+    isNamed: true,
+    notes: 'Scale reps to 30 or 40 for first attempt.',
+  },
+
+  // --- Bodyweight-only ---
+  {
+    name: 'Bodyweight Blast',
+    format: 'amrap',
+    duration: 15,
+    description: 'AMRAP 15: 10 Burpees, 20 Mountain Climbers, 30 Air Squats',
+    slots: 0,
+    defaultReps: [10, 20, 30],
+    requiresEquipment: [],
+    isNamed: true,
+    fixedExercises: ['Burpee', 'Mountain Climber', 'Goblet Squat'],
+  },
+  {
+    name: 'Death by Burpees',
+    format: 'emom',
+    duration: null,
+    description: 'EMOM: 1 burpee in minute 1, 2 in minute 2... until you can\'t complete the reps in the minute.',
+    slots: 0,
+    defaultReps: [0],
+    requiresEquipment: [],
+    isNamed: true,
   },
 ]
 
@@ -315,14 +433,26 @@ async function generateWod(
   // Pick a WOD template (bias toward shorter if high load or re-entry)
   let templates = [...WOD_TEMPLATES]
   if (loadFactor === 'high' || isReEntry) {
-    templates = templates.filter(t => !t.duration || t.duration <= 16)
+    // Filter to shorter workouts, exclude hero WODs
+    templates = templates.filter(t => (!t.duration || t.duration <= 16) && !t.isHero)
   }
   if (weekType === 'kid') {
-    templates = templates.filter(t => !t.duration || t.duration <= 15)
+    templates = templates.filter(t => (!t.duration || t.duration <= 15) && !t.isHero)
   }
+  // Filter named WODs by available equipment
+  if (equipment && equipment.length > 0) {
+    templates = templates.filter(t =>
+      t.requiresEquipment.length === 0 ||
+      t.requiresEquipment.every(req => equipment.includes(req))
+    )
+  }
+  if (templates.length === 0) templates = WOD_TEMPLATES.slice(0, 5) // fallback to basic templates
   const wodTemplate = templates[Math.floor(Math.random() * templates.length)]
 
-  const picked = shuffled.slice(0, wodTemplate.slots)
+  // For named WODs (slots === 0), use description-only — no exercise randomization
+  const picked = wodTemplate.slots === 0
+    ? [] // Named workout — exercises are described in the WOD description
+    : shuffled.slice(0, wodTemplate.slots)
 
   // Batch fetch history for picked exercises
   const exerciseIds = picked.map(e => e.id)
@@ -386,6 +516,9 @@ async function generateWod(
       format: wodTemplate.format,
       duration: wodTemplate.duration,
       description: wodTemplate.description,
+      ...(wodTemplate.isNamed && { isNamed: true }),
+      ...(wodTemplate.isHero && { isHero: true }),
+      ...(wodTemplate.notes && { notes: wodTemplate.notes }),
     },
   }
 }

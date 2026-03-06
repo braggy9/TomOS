@@ -531,7 +531,7 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 - iOS/macOS push notifications working (both devices registered)
 - **General Notes feature** — Full CRUD API with search and ecosystem integration
 - **Journal / Companion feature** — Entries, AI reflections, chat, insights, search, summaries
-- **FitnessOS** — Gym sessions, progressive overload, Strava sync, recovery check-ins
+- **FitnessOS** — Running-first fitness tracker with gym sessions, Strava sync, HR zones, weekly dashboard, recovery
 - **TomOS Web Apps** — 5 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
   - Tasks: https://tomos-tasks.vercel.app
   - Notes: https://tomos-notes.vercel.app
@@ -590,6 +590,23 @@ TomOS/
 │   │   ├── insights/        # Stats, mood patterns, theme trends
 │   │   ├── search/          # Full-text search with GIN index
 │   │   └── summary/         # Weekly/monthly AI summaries
+│   ├── gym/                 # FitnessOS endpoints
+│   │   ├── exercises/       # Exercise CRUD
+│   │   ├── sessions/        # Gym session CRUD
+│   │   ├── log/             # Quick log (exercise names → IDs)
+│   │   ├── suggest/         # Smart session suggestions
+│   │   ├── recovery/        # Recovery check-ins
+│   │   ├── settings/        # UserSettings (maxHR, weekType)
+│   │   ├── running/         # Running activities, sessions, zones, today, dashboard
+│   │   │   ├── activities/  # List + detail + streams
+│   │   │   ├── sessions/    # RunSession subjective data
+│   │   │   ├── today/       # Today's run check
+│   │   │   ├── zones/       # HR zone calculation
+│   │   │   └── stats/       # 7d/30d aggregates
+│   │   ├── dashboard/weekly/  # Weekly dashboard aggregates
+│   │   └── sync/
+│   │       ├── strava/      # Webhook, manual, auth, callback
+│   │       └── garmin/      # Auth, callback, webhook, workouts (stubs)
 │   ├── calendar/            # Google Calendar sync
 │   ├── email/               # Email-to-task processing
 │   ├── focus/               # Focus mode state

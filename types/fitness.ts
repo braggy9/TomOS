@@ -290,10 +290,13 @@ export interface ExerciseSuggestion {
 }
 
 export interface WodInfo {
-  name: string;        // e.g. "AMRAP 15", "21-15-9"
+  name: string;        // e.g. "AMRAP 15", "21-15-9", "Murph"
   format: string;      // amrap, emom, fortime, tabata
   duration: number | null;
   description: string;
+  isNamed?: boolean;   // true for named/benchmark WODs
+  isHero?: boolean;    // true for hero WODs
+  notes?: string;      // scaling notes, tips
 }
 
 export interface SessionSuggestion {

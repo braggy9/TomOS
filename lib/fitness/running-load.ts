@@ -113,13 +113,27 @@ async function getLoadTrend(): Promise<'increasing' | 'decreasing' | 'stable'> {
 }
 
 /**
+ * Check if athlete is in a return-to-training phase.
+ * If an active training block with phase='rebuild' or 'base' exists,
+ * ACWR spike warnings should be suppressed — elevated ACWR is expected
+ * when chronic load is low from detraining.
+ */
+export async function isReturningAthlete(): Promise<boolean> {
+  const activeBlock = await prisma.trainingBlock.findFirst({
+    where: { status: 'active', phase: { in: ['rebuild', 'base'] } },
+  })
+  return !!activeBlock
+}
+
+/**
  * Rich running load context combining ACWR, trend, and recommendation.
  */
 export async function getRunningLoadContext(): Promise<RunningLoadContext> {
-  const [weeklyLoad, { acwr, acute, chronic }, trend] = await Promise.all([
+  const [weeklyLoad, { acwr, acute, chronic }, trend, returning] = await Promise.all([
     getWeeklyRunningLoad(7),
     getACWR(),
     getLoadTrend(),
+    isReturningAthlete(),
   ])
 
   // Personal baseline is the 28-day weekly average
@@ -127,7 +141,9 @@ export async function getRunningLoadContext(): Promise<RunningLoadContext> {
   const loadFactor = classifyLoad(weeklyLoad, weeklyBaseline || null)
 
   let recommendation: string
-  if (acwr > 1.5) {
+  if (returning && acwr > 1.3) {
+    recommendation = 'ACWR elevated but you\'re in a rebuild phase — this is expected. Follow the plan.'
+  } else if (acwr > 1.5) {
     recommendation = 'Spike detected — high injury risk. Consider rest or easy movement only.'
   } else if (acwr > 1.3) {
     recommendation = 'Load rising fast. Scale back intensity or skip high-impact work.'
