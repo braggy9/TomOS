@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const since = new Date()
     since.setDate(since.getDate() - days)
 
-    const [runs, gymSessions, recoveryCheckins, loadContext, settings] = await Promise.all([
+    const [runs, gymSessions, recoveryCheckins, loadContext, settings, activities] = await Promise.all([
       prisma.runningSync.findMany({
         where: { date: { gte: since } },
         include: { runSession: true },
@@ -27,6 +27,10 @@ export async function GET(request: NextRequest) {
       }),
       getRunningLoadContext(),
       prisma.userSettings.findUnique({ where: { id: 'singleton' } }),
+      prisma.activity.findMany({
+        where: { date: { gte: since } },
+        orderBy: { date: 'desc' },
+      }),
     ])
 
     // Running stats
@@ -65,6 +69,15 @@ export async function GET(request: NextRequest) {
 
     const latestCheckin = recoveryCheckins[0] || null
 
+    // Activities stats
+    const activityByType: Record<string, number> = {}
+    let activityTotalDuration = 0
+    const activityRpes = activities.map(a => a.rpe).filter((r): r is number => r !== null)
+    for (const a of activities) {
+      activityByType[a.activityType] = (activityByType[a.activityType] || 0) + 1
+      activityTotalDuration += a.duration
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -86,6 +99,14 @@ export async function GET(request: NextRequest) {
         gym: {
           sessions: gymSessions.length,
           avgRPE,
+        },
+        activities: {
+          sessions: activities.length,
+          totalDuration: activityTotalDuration,
+          byType: activityByType,
+          avgRPE: activityRpes.length > 0
+            ? Math.round((activityRpes.reduce((s, r) => s + r, 0) / activityRpes.length) * 10) / 10
+            : null,
         },
         recovery: {
           avgReadiness,

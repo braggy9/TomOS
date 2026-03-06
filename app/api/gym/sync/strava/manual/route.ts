@@ -42,10 +42,49 @@ export async function POST(request: NextRequest) {
 
     const activities = await res.json()
 
-    // Filter to running activities only
+    // Split into runs and other activities
     const runs = activities.filter(
       (a: any) => a.type === 'Run' || a.type === 'TrailRun'
     )
+
+    // Sync non-run activities to Activity table
+    const NON_RUN_TYPES = ['Swim', 'Workout', 'Yoga', 'Walk', 'Hike', 'Ride', 'WeightTraining', 'Crossfit']
+    const typeMap: Record<string, string> = {
+      Swim: 'swim', Workout: 'workout', Yoga: 'yoga', Walk: 'walk',
+      Hike: 'walk', Ride: 'cross-train', WeightTraining: 'workout', Crossfit: 'workout',
+    }
+    const otherActivities = activities.filter((a: any) => NON_RUN_TYPES.includes(a.type))
+    let activitiesSynced = 0
+    for (const a of otherActivities) {
+      try {
+        await prisma.activity.upsert({
+          where: { externalId: String(a.id) },
+          create: {
+            externalId: String(a.id),
+            source: 'strava',
+            date: new Date(a.start_date),
+            activityType: typeMap[a.type] || 'other',
+            duration: Math.round(a.moving_time / 60),
+            distance: a.distance ? a.distance / 1000 : null,
+            avgHeartRate: a.average_heartrate || null,
+            calories: a.calories || null,
+            activityName: a.name || null,
+          },
+          update: {
+            date: new Date(a.start_date),
+            activityType: typeMap[a.type] || 'other',
+            duration: Math.round(a.moving_time / 60),
+            distance: a.distance ? a.distance / 1000 : null,
+            avgHeartRate: a.average_heartrate || null,
+            calories: a.calories || null,
+            activityName: a.name || null,
+          },
+        })
+        activitiesSynced++
+      } catch (err) {
+        console.error(`Failed to sync activity ${a.id}:`, err)
+      }
+    }
 
     let synced = 0
     let skipped = 0
@@ -134,6 +173,7 @@ export async function POST(request: NextRequest) {
         synced,
         skipped,
         enriched,
+        activitiesSynced,
         totalActivities: activities.length,
         runsFound: runs.length,
       },

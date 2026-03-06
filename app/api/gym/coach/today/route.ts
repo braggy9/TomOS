@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const { startOfDay, endOfDay, dateStr } = getSydneyToday()
 
-    const [todayRun, todayRecovery, todayPrescription] = await Promise.all([
+    const [todayRun, todayRecovery, todayPrescription, todayActivities] = await Promise.all([
       prisma.runningSync.findFirst({
         where: { date: { gte: startOfDay, lte: endOfDay } },
         include: { runSession: true },
@@ -22,6 +22,10 @@ export async function GET() {
         orderBy: { date: 'desc' },
       }),
       prisma.coachPrescription.findFirst({
+        where: { date: { gte: startOfDay, lte: endOfDay } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.activity.findMany({
         where: { date: { gte: startOfDay, lte: endOfDay } },
         orderBy: { createdAt: 'desc' },
       }),
@@ -55,6 +59,14 @@ export async function GET() {
               notes: todayPrescription.notes,
             }
           : null,
+        activities: todayActivities.map(a => ({
+          id: a.id,
+          activityType: a.activityType,
+          duration: a.duration,
+          distance: a.distance,
+          activityName: a.activityName,
+          source: a.source,
+        })),
       },
     })
   } catch (error) {

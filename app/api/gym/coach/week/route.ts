@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const monday = new Date(mondayMs)
     const sunday = new Date(mondayMs + 7 * 86400000 - 1)
 
-    const [prescriptions, runs, gymSessions] = await Promise.all([
+    const [prescriptions, runs, gymSessions, activities] = await Promise.all([
       prisma.coachPrescription.findMany({
         where: { date: { gte: monday, lte: sunday } },
         orderBy: { date: 'asc' },
@@ -36,6 +36,11 @@ export async function GET(request: NextRequest) {
       prisma.gymSession.findMany({
         where: { date: { gte: monday, lte: sunday } },
         select: { id: true, sessionType: true, date: true, overallRPE: true },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.activity.findMany({
+        where: { date: { gte: monday, lte: sunday } },
+        select: { id: true, activityType: true, date: true, duration: true, distance: true, activityName: true },
         orderBy: { date: 'asc' },
       }),
     ])
@@ -53,6 +58,9 @@ export async function GET(request: NextRequest) {
       )
       const dayGym = gymSessions.filter(
         g => g.date >= dayStart && g.date <= dayEnd
+      )
+      const dayActivities = activities.filter(
+        a => a.date >= dayStart && a.date <= dayEnd
       )
 
       return {
@@ -81,6 +89,13 @@ export async function GET(request: NextRequest) {
           id: g.id,
           sessionType: g.sessionType,
           rpe: g.overallRPE,
+        })),
+        completedActivities: dayActivities.map(a => ({
+          id: a.id,
+          activityType: a.activityType,
+          duration: a.duration,
+          distance: a.distance,
+          activityName: a.activityName,
         })),
       }
     })

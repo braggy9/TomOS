@@ -621,6 +621,33 @@ model PlannedSession {
 }
 
 // ============================================
+// ACTIVITIES - Non-run activities (swim, mobility, yoga, cross-train, walk)
+// ============================================
+
+model Activity {
+  id           String   @id @default(uuid())
+  date         DateTime
+  activityType String   // swim, workout, mobility, yoga, cross-train, walk
+  source       String   @default("manual") // "manual", "strava"
+  externalId   String?  @unique // Strava activity ID (null for manual)
+  duration     Int      // minutes
+  distance     Float?   // km (null for mobility/yoga)
+  avgHeartRate Int?
+  calories     Int?
+  activityName String?  @db.Text // Strava name or user-provided
+  rpe          Int?     // 1-10
+  moodPost     Int?     // 1-5
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("activities")
+  @@index([date])
+  @@index([activityType])
+  @@index([source])
+}
+
+// ============================================
 // COACH PRESCRIPTIONS - Daily session prescriptions from Claude Coach
 // ============================================
 

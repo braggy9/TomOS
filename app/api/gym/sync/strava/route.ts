@@ -69,9 +69,40 @@ export async function POST(request: NextRequest) {
 
     const activity = await activityRes.json()
 
-    // Only sync running activities
+    // Route non-run activities to Activity table
+    const NON_RUN_TYPES = ['Swim', 'Workout', 'Yoga', 'Walk', 'Hike', 'Ride', 'WeightTraining', 'Crossfit']
     if (activity.type !== 'Run' && activity.type !== 'TrailRun') {
-      return NextResponse.json({ received: true, skipped: 'Not a run' })
+      if (NON_RUN_TYPES.includes(activity.type)) {
+        const typeMap: Record<string, string> = {
+          Swim: 'swim', Workout: 'workout', Yoga: 'yoga', Walk: 'walk',
+          Hike: 'walk', Ride: 'cross-train', WeightTraining: 'workout', Crossfit: 'workout',
+        }
+        await prisma.activity.upsert({
+          where: { externalId: String(activityId) },
+          create: {
+            externalId: String(activityId),
+            source: 'strava',
+            date: new Date(activity.start_date),
+            activityType: typeMap[activity.type] || 'other',
+            duration: Math.round(activity.moving_time / 60),
+            distance: activity.distance ? activity.distance / 1000 : null,
+            avgHeartRate: activity.average_heartrate || null,
+            calories: activity.calories || null,
+            activityName: activity.name || null,
+          },
+          update: {
+            date: new Date(activity.start_date),
+            activityType: typeMap[activity.type] || 'other',
+            duration: Math.round(activity.moving_time / 60),
+            distance: activity.distance ? activity.distance / 1000 : null,
+            avgHeartRate: activity.average_heartrate || null,
+            calories: activity.calories || null,
+            activityName: activity.name || null,
+          },
+        })
+        return NextResponse.json({ received: true, synced: 'activity', type: activity.type })
+      }
+      return NextResponse.json({ received: true, skipped: `Unsupported type: ${activity.type}` })
     }
 
     // Parse splits from Strava splits_metric
