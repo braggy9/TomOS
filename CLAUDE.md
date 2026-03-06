@@ -525,13 +525,15 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 
 ---
 
-## Current Status (Updated 2026-02-27)
+## Current Status (Updated 2026-03-06)
 
 ### Completed
 - iOS/macOS push notifications working (both devices registered)
 - **General Notes feature** — Full CRUD API with search and ecosystem integration
 - **Journal / Companion feature** — Entries, AI reflections, chat, insights, search, summaries
 - **FitnessOS** — Running-first fitness tracker with gym sessions, Strava sync, HR zones, weekly dashboard, recovery
+- **Coach API (2026-03-06)** — 7 endpoints for Claude running coach, CoachPrescription model, training calendar
+- **Sydney timezone fix (2026-03-06)** — `lib/sydney-time.ts` replaces broken `toLocaleString`+`setHours` pattern
 - **TomOS Web Apps** — 5 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
   - Tasks: https://tomos-tasks.vercel.app
   - Notes: https://tomos-notes.vercel.app
@@ -603,6 +605,13 @@ TomOS/
 │   │   │   ├── today/       # Today's run check
 │   │   │   ├── zones/       # HR zone calculation
 │   │   │   └── stats/       # 7d/30d aggregates
+│   │   ├── coach/           # Claude coach API endpoints
+│   │   │   ├── summary/     # Aggregated training data (GET ?days=7)
+│   │   │   ├── activities/  # Activity list + [id] detail
+│   │   │   ├── today/       # Today's snapshot (run, recovery, prescription, plan)
+│   │   │   ├── prescribe/   # Write prescription (GET for Claude bridge, POST)
+│   │   │   ├── plan/        # Current training plan context
+│   │   │   └── week/        # Week calendar data (prescriptions + activities)
 │   │   ├── dashboard/weekly/  # Weekly dashboard aggregates
 │   │   └── sync/
 │   │       ├── strava/      # Webhook, manual, auth, callback
@@ -615,9 +624,10 @@ TomOS/
 │   ├── health/              # Health check
 │   └── cron/                # Scheduled jobs
 ├── lib/
-│   └── journalPrompt.ts     # Three-layer prompt system for companion ⚡ NEW
+│   ├── journalPrompt.ts     # Three-layer prompt system for companion
+│   └── sydney-time.ts       # Sydney timezone utilities (getSydneyToday, getSydneyDayBounds)
 ├── prisma/
-│   ├── schema.prisma        # Database schema (Tasks + MatterOS + Notes + Journal)
+│   ├── schema.prisma        # Database schema (Tasks + MatterOS + Notes + Journal + FitnessOS)
 │   └── migrations/          # Migration history
 ├── types/
 │   └── matteros.ts          # MatterOS TypeScript types
