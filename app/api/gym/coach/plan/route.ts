@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getSydneyToday } from '@/lib/sydney-time'
 
 /**
  * GET /api/gym/coach/plan
@@ -7,9 +8,7 @@ import { NextResponse } from 'next/server'
  */
 export async function GET() {
   try {
-    const now = new Date()
-    const sydneyDate = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }))
-    sydneyDate.setHours(0, 0, 0, 0)
+    const { endOfDay: sydneyDate } = getSydneyToday()
 
     // Find active block
     const activeBlock = await prisma.trainingBlock.findFirst({

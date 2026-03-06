@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getSydneyToday, getSydneyDayBounds } from '@/lib/sydney-time'
 
 /**
  * Shared upsert logic for both GET and POST handlers.
@@ -19,22 +20,21 @@ async function upsertPrescription(params: {
   const { sessionType, date, targetDistanceKm, targetHRZone, targetPace, warmup, mainSet, cooldown, notes, source } = params
 
   // Default to tomorrow (Sydney time) if no date provided
-  let prescriptionDate: Date
-  if (date) {
-    prescriptionDate = new Date(date)
-  } else {
-    const now = new Date()
-    const sydneyDate = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }))
-    sydneyDate.setDate(sydneyDate.getDate() + 1)
-    sydneyDate.setHours(0, 0, 0, 0)
-    prescriptionDate = sydneyDate
-  }
+  let startOfDay: Date
+  let endOfDay: Date
 
-  // Day boundaries for upsert lookup
-  const startOfDay = new Date(prescriptionDate)
-  startOfDay.setHours(0, 0, 0, 0)
-  const endOfDay = new Date(prescriptionDate)
-  endOfDay.setHours(23, 59, 59, 999)
+  if (date) {
+    const bounds = getSydneyDayBounds(new Date(date))
+    startOfDay = bounds.startOfDay
+    endOfDay = bounds.endOfDay
+  } else {
+    // Tomorrow in Sydney = today's startOfDay + 24h
+    const today = getSydneyToday()
+    const tomorrowDate = new Date(today.startOfDay.getTime() + 24 * 60 * 60 * 1000)
+    const bounds = getSydneyDayBounds(tomorrowDate)
+    startOfDay = bounds.startOfDay
+    endOfDay = bounds.endOfDay
+  }
 
   // Check for existing prescription on this date
   const existing = await prisma.coachPrescription.findFirst({

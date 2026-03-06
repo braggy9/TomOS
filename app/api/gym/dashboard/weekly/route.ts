@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getACWR } from '@/lib/fitness/running-load'
+import { getSydneyToday } from '@/lib/sydney-time'
 
 /**
  * GET /api/gym/dashboard/weekly
@@ -8,18 +9,16 @@ import { getACWR } from '@/lib/fitness/running-load'
  */
 export async function GET() {
   try {
-    const now = new Date()
-    const sydneyDate = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }))
+    const { startOfDay, sydneyDate } = getSydneyToday()
 
-    // Get Monday of current week
-    const dayOfWeek = sydneyDate.getDay()
-    const monday = new Date(sydneyDate)
-    monday.setDate(sydneyDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-    monday.setHours(0, 0, 0, 0)
+    // Get Monday of current week (in Sydney time)
+    const jsDay = sydneyDate.getUTCDay()
+    const daysSinceMonday = jsDay === 0 ? 6 : jsDay - 1
 
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
-    sunday.setHours(23, 59, 59, 999)
+    // Monday 00:00:00 Sydney = today's startOfDay minus daysSinceMonday days
+    const monday = new Date(startOfDay.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000)
+    // Sunday 23:59:59.999 Sydney = Monday + 7 days - 1ms
+    const sunday = new Date(monday.getTime() + 7 * 24 * 60 * 60 * 1000 - 1)
 
     // Parallel queries
     const [runs, gymSessions, recoveryCheckins, { acwr }] = await Promise.all([

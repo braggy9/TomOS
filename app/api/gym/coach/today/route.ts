@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getSydneyToday } from '@/lib/sydney-time'
 
 /**
  * GET /api/gym/coach/today
@@ -7,18 +8,10 @@ import { NextResponse } from 'next/server'
  */
 export async function GET() {
   try {
-    // Sydney timezone boundary
-    const now = new Date()
-    const sydneyDate = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }))
-    const startOfDay = new Date(sydneyDate)
-    startOfDay.setHours(0, 0, 0, 0)
-    const endOfDay = new Date(sydneyDate)
-    endOfDay.setHours(23, 59, 59, 999)
-
-    const dateStr = sydneyDate.toISOString().slice(0, 10)
+    const { startOfDay, endOfDay, dateStr, sydneyDate } = getSydneyToday()
 
     // dayOfWeek: 1=Mon ... 7=Sun
-    const jsDay = sydneyDate.getDay()
+    const jsDay = sydneyDate.getUTCDay()
     const todayDayOfWeek = jsDay === 0 ? 7 : jsDay
 
     const [todayRun, todayRecovery, todayPrescription, currentWeek] = await Promise.all([

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getSydneyToday } from '@/lib/sydney-time'
 
 /**
  * POST /api/gym/running/sessions
@@ -31,12 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-find today's recovery check-in (Sydney timezone)
-    const now = new Date()
-    const sydneyDate = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }))
-    const startOfDay = new Date(sydneyDate)
-    startOfDay.setHours(0, 0, 0, 0)
-    const endOfDay = new Date(sydneyDate)
-    endOfDay.setHours(23, 59, 59, 999)
+    const { startOfDay, endOfDay } = getSydneyToday()
 
     const todayRecovery = await prisma.recoveryCheckIn.findFirst({
       where: { date: { gte: startOfDay, lte: endOfDay } },

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getSydneyToday } from '@/lib/sydney-time'
 
 /**
  * GET /api/gym/running/today
@@ -7,12 +8,7 @@ import { NextResponse } from 'next/server'
  */
 export async function GET() {
   try {
-    const now = new Date()
-    const sydneyDate = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Sydney' }))
-    const startOfDay = new Date(sydneyDate)
-    startOfDay.setHours(0, 0, 0, 0)
-    const endOfDay = new Date(sydneyDate)
-    endOfDay.setHours(23, 59, 59, 999)
+    const { startOfDay, endOfDay } = getSydneyToday()
 
     const todayRun = await prisma.runningSync.findFirst({
       where: { date: { gte: startOfDay, lte: endOfDay } },
