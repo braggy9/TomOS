@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getSydneyToday } from '@/lib/sydney-time'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/gym/running/today
  * Check if there's a Strava run today (Sydney timezone)

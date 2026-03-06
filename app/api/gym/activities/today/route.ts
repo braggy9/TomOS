@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getSydneyToday } from '@/lib/sydney-time'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/gym/activities/today
  * Returns all activities logged today (Sydney time).

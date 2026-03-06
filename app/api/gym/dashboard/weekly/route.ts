@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import { getACWR } from '@/lib/fitness/running-load'
 import { getSydneyToday } from '@/lib/sydney-time'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/gym/dashboard/weekly
  * Aggregated weekly data for the dashboard
