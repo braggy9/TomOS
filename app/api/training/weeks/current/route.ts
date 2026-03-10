@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/training/weeks/current
  * Get the current training week (by date) with all planned sessions.

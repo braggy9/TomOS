@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/training/today
  * "What should I do today?" — returns today's planned session with block/week context.
