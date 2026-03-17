@@ -762,3 +762,115 @@ model JournalSummary {
   @@index([type])
   @@index([periodStart])
 }
+
+// ============================================
+// LIFE — Personal Planning & Productivity
+// ============================================
+
+// ─── Goals ──────────────────────────────────────
+model Goal {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   @db.Text
+  category    String    // health, family, career, financial, creative, social, learning
+  timeframe   String    // weekly, monthly, quarterly, yearly
+  status      String    @default("active") // active, completed, paused, abandoned
+  progress    Int       @default(0) // 0-100 percentage
+  targetDate  DateTime?
+  completedAt DateTime?
+
+  // Parent goal for hierarchical goals
+  parentId    String?
+  parent      Goal?     @relation("SubGoals", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Goal[]    @relation("SubGoals")
+
+  // Linked habits
+  habits      Habit[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("goals")
+  @@index([status])
+  @@index([category])
+  @@index([timeframe])
+  @@index([parentId])
+}
+
+// ─── Habits ─────────────────────────────────────
+model Habit {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  frequency     String   // daily, weekdays, weekends, mon_wed_fri, tue_thu, custom
+  customDays    Int[]    // [1,3,5] for Mon/Wed/Fri if frequency=custom (1=Mon, 7=Sun)
+  category      String?  // health, productivity, family, wellbeing
+  icon          String?  // Emoji
+  status        String   @default("active") // active, paused, archived
+  streakCurrent Int      @default(0)
+  streakBest    Int      @default(0)
+
+  goalId        String?
+  goal          Goal?    @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  logs          HabitLog[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("habits")
+  @@index([status])
+  @@index([goalId])
+}
+
+model HabitLog {
+  id        String   @id @default(uuid())
+  habitId   String
+  date      DateTime // Date only (no time), Sydney TZ
+  completed Boolean  @default(true)
+  notes     String?
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([habitId, date])
+  @@map("habit_logs")
+  @@index([habitId])
+  @@index([date])
+}
+
+// ─── Shopping List ──────────────────────────────
+model ShoppingItem {
+  id        String   @id @default(uuid())
+  name      String
+  quantity  String?  // "2", "1kg", "bunch of"
+  category  String?  // produce, dairy, meat, pantry, household, other
+  checked   Boolean  @default(false)
+  listId    String?  // For multiple lists (null = default list)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shopping_items")
+  @@index([checked])
+  @@index([listId])
+  @@index([category])
+}
+
+// ─── Weekly Plans ───────────────────────────────
+model WeeklyPlan {
+  id                String   @id @default(uuid())
+  weekStart         DateTime // Monday of the week (Sydney TZ)
+  energyLevel       Int?     // 1-5
+  kidWeek           Boolean? // true = kids week
+  priorities        Json?    // [{title, category, status}]
+  intentions        Json?    // [{day, focus, notes}]
+  reflection        String?  @db.Text
+  satisfactionScore Int?     // 1-5 end-of-week rating
+  status            String   @default("active") // draft, active, completed
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([weekStart])
+  @@map("weekly_plans")
+  @@index([status])
+  @@index([weekStart])
+}
