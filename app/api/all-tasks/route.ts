@@ -48,21 +48,33 @@ export async function GET() {
       'low': 'Someday',
     };
 
-    const formattedTasks = tasks.map((task: any) => ({
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      status: statusMap[task.status] ?? task.status,
-      priority: priorityMap[task.priority] ?? task.priority,
-      dueDate: task.dueDate?.toISOString() || null,
-      completedAt: task.completedAt?.toISOString() || null,
-      parentId: task.parentId || null,
-      subtaskCount: task.children?.length || 0,
-      project: task.project,
-      tags: task.tags.map((tt: any) => tt.tag),
-      createdAt: task.createdAt.toISOString(),
-      updatedAt: task.updatedAt.toISOString(),
-    }));
+    const formattedTasks = tasks.map((task: any) => {
+      const tagNames: string[] = task.tags.map((tt: any) => tt.tag.name);
+      const context = tagNames
+        .filter((t) => t.startsWith('context:'))
+        .map((t) => t.replace('context:', ''));
+      const energyTag = tagNames.find((t) => t.startsWith('energy:'));
+      const timeTag = tagNames.find((t) => t.startsWith('time:'));
+
+      return {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: statusMap[task.status] ?? task.status,
+        priority: priorityMap[task.priority] ?? task.priority,
+        dueDate: task.dueDate?.toISOString() || null,
+        completedAt: task.completedAt?.toISOString() || null,
+        parentId: task.parentId || null,
+        subtaskCount: task.children?.length || 0,
+        project: task.project,
+        tags: task.tags.map((tt: any) => tt.tag),
+        context,
+        energy: energyTag ? energyTag.replace('energy:', '') : null,
+        time: timeTag ? timeTag.replace('time:', '') : null,
+        createdAt: task.createdAt.toISOString(),
+        updatedAt: task.updatedAt.toISOString(),
+      };
+    });
 
     console.log(`Retrieved ${formattedTasks.length} tasks from Postgres`);
 

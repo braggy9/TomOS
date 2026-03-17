@@ -85,10 +85,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    // Support field aliases from CC skills: matter_type → type, entity → client
+    const type = body.type || body.matter_type;
+    const client = body.client || body.entity;
+
     // Required fields
-    if (!body.title || !body.client || !body.type) {
+    if (!body.title || !client || !type) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: title, client, type' },
+        { success: false, error: 'Missing required fields: title, client (or entity), type (or matter_type)' },
         { status: 400 }
       );
     }
@@ -98,9 +102,9 @@ export async function POST(request: NextRequest) {
       data: {
         title: body.title,
         description: body.description || null,
-        client: body.client,
+        client,
         matterNumber: body.matterNumber || null,
-        type: body.type,
+        type,
         status: body.status || 'active',
         priority: body.priority || 'medium',
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
