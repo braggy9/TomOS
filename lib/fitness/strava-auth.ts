@@ -16,6 +16,15 @@ export async function getStravaAccessToken(): Promise<string | null> {
   // Refresh 5 minutes early to avoid edge cases
   const nowEpoch = Math.floor(Date.now() / 1000)
   if (nowEpoch > token.expiresAt - 300) {
+    // Prevent concurrent refreshes: if another serverless instance refreshed in the
+    // last 2 minutes, the new token is already in the DB — just return it.
+    const recentlyRefreshed = Date.now() - token.updatedAt.getTime() < 2 * 60 * 1000
+    if (recentlyRefreshed) {
+      // Re-fetch to get the latest tokens written by the other instance
+      const latest = await prisma.stravaToken.findUnique({ where: { id: 'singleton' } })
+      return latest?.accessToken ?? null
+    }
+
     const refreshed = await refreshStravaToken(token.refreshToken)
     return refreshed?.accessToken ?? null
   }
