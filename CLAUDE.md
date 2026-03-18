@@ -525,7 +525,121 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 
 ---
 
-## Current Status (Updated 2026-03-18)
+## Life Module — Personal Planning & Productivity
+
+**Status:** ✅ **COMPLETE** (March 2026)
+**Architecture:** Goals, habits, shopping lists, weekly plans — orchestration layer across TomOS modules
+**Web App:** https://tomos-life.vercel.app
+
+### What is the Life Module?
+
+Personal planning and daily life management. Owns goals, habits, shopping, and weekly plans. Reads from Tasks, Journal, and Fitness modules via the `/api/life/today` aggregated dashboard endpoint. No AI in the PWA — AI lives in Claude skills.
+
+### Database Schema
+
+**5 Tables:**
+
+- `goals` — Hierarchical goal tracking
+  - Fields: title, description, category (health/family/career/financial/creative/social/learning), timeframe (weekly/monthly/quarterly/yearly), status, progress (0-100), targetDate, completedAt
+  - Self-relation: parentId for sub-goals
+  - Relations: has many Habit[]
+  - Indexes: status, category, timeframe, parentId
+
+- `habits` — Habit tracking with streaks
+  - Fields: title, description, frequency (daily/weekdays/weekends/mon_wed_fri/tue_thu/custom), customDays Int[], category, icon, status, streakCurrent, streakBest
+  - Relations: belongs to Goal (optional), has many HabitLog[]
+  - Indexes: status, goalId
+
+- `habit_logs` — Daily habit completion records
+  - Fields: habitId, date, completed, notes
+  - Constraint: @@unique([habitId, date])
+  - Indexes: habitId, date
+
+- `shopping_items` — Shopping list items
+  - Fields: name, quantity, category (produce/dairy/meat/pantry/household/other), checked, listId, sortOrder
+  - Indexes: checked, listId, category
+
+- `weekly_plans` — Week-level planning
+  - Fields: weekStart (@@unique, Monday Sydney TZ), energyLevel (1-5), kidWeek, priorities (Json), intentions (Json), reflection, satisfactionScore (1-5), status
+  - Indexes: status, weekStart
+
+### API Endpoints
+
+**Goals:**
+```
+GET    /api/life/goals                  # List (filter: status, category, timeframe, parentId)
+POST   /api/life/goals                  # Create (required: title, category, timeframe)
+GET    /api/life/goals/[id]             # Get with children + linked habits + recent logs
+PATCH  /api/life/goals/[id]             # Update (auto-sets completedAt on status change)
+DELETE /api/life/goals/[id]             # Soft archive (sets status=abandoned)
+```
+
+**Habits:**
+```
+GET    /api/life/habits                 # List (filter: status, category, goalId)
+POST   /api/life/habits                 # Create (required: title, frequency)
+GET    /api/life/habits/[id]            # Get with 30-day log history
+PATCH  /api/life/habits/[id]            # Update
+DELETE /api/life/habits/[id]            # Archive (soft delete)
+POST   /api/life/habits/[id]/log        # Log completion for date (upsert, auto-updates streak)
+GET    /api/life/habits/check-in        # Today's habits with completion status (Sydney TZ, frequency-filtered)
+POST   /api/life/habits/check-in        # Batch log: { habits: [{ id, completed }] }
+```
+
+**Shopping:**
+```
+GET    /api/life/shopping               # List (filter: listId, checked, category)
+POST   /api/life/shopping               # Add item(s) — single { name } or { items: [...] }
+PATCH  /api/life/shopping/[id]          # Update item
+DELETE /api/life/shopping/[id]          # Remove item
+POST   /api/life/shopping/check         # Toggle checked: { id } or { ids: [] }
+POST   /api/life/shopping/clear         # Delete all checked items: { listId? }
+POST   /api/life/shopping/parse         # NLP parse: { text: "milk, 2kg chicken" } → structured items (Claude Haiku)
+```
+
+**Weekly Plans:**
+```
+GET    /api/life/plans                  # List (filter: status)
+POST   /api/life/plans                  # Create for specific week: { weekStart } (409 if exists)
+GET    /api/life/plans/current          # This week's plan (auto-creates if none, Monday Sydney TZ)
+GET    /api/life/plans/[id]             # Get single plan
+PATCH  /api/life/plans/[id]             # Update (priorities, intentions, reflection, etc.)
+```
+
+**Dashboard:**
+```
+GET    /api/life/today                  # Aggregated snapshot:
+                                        #   - habits: today's due habits + completion (frequency-filtered)
+                                        #   - shopping: unchecked count
+                                        #   - plan: current week's priorities + energy + kid week
+                                        #   - tasks: top 5 open by priority/due (from tasks table)
+                                        #   - journal: last entry mood/energy (from journal_entries)
+                                        #   - training: today's prescription (from coach_prescriptions)
+```
+
+### Key Implementation Details
+
+- **Streak calculation:** Fire-and-forget on log creation. Counts consecutive completed days backwards. Updates both `streakCurrent` and `streakBest`.
+- **Habit frequency filtering:** `check-in` and `today` endpoints filter active habits by day-of-week matching (daily, weekdays, weekends, mon_wed_fri, tue_thu, custom).
+- **Shopping NLP:** `/parse` uses Claude Haiku to extract `[{ name, quantity, category }]` from natural language text.
+- **Plans auto-create:** `GET /plans/current` calculates Monday of current Sydney week and creates a draft plan if none exists.
+- **Today endpoint:** Runs 6 Prisma queries in `Promise.all` for fast aggregation across modules. Sorts tasks by proper priority ordering (urgent > high > medium > low).
+
+### Integration with Other Modules
+
+| Module | How Life Reads It |
+|--------|-------------------|
+| **Tasks** | `/api/life/today` → top 5 open tasks by priority/due |
+| **Journal** | `/api/life/today` → last entry mood + energy |
+| **Fitness** | `/api/life/today` → today's coach prescription |
+| **Notes** | No direct integration |
+| **Matters** | No direct integration |
+
+Life is the **orchestration layer** — reads from other modules but only owns goals, habits, shopping, and weekly plans.
+
+---
+
+## Current Status (Updated 2026-03-19)
 
 ### Completed
 - iOS/macOS push notifications working (both devices registered)
@@ -534,13 +648,14 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 - **FitnessOS** — Running-first fitness tracker with gym sessions, Strava sync, HR zones, weekly dashboard, recovery
 - **Coach API (2026-03-06)** — 7 endpoints for Claude running coach, CoachPrescription model, training calendar
 - **Sydney timezone fix (2026-03-06)** — `lib/sydney-time.ts` replaces broken `toLocaleString`+`setHours` pattern
-- **Life module (2026-03-17)** — Schema + 15 API endpoints
-- **TomOS Web Apps** — 5 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
+- **Life module (2026-03-17)** — Schema + 15 API endpoints + PWA
+- **TomOS Web Apps** — 6 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
   - Tasks: https://tomos-tasks.vercel.app
   - Notes: https://tomos-notes.vercel.app
   - Matters: https://tomos-matters.vercel.app
   - Journal: https://tomos-journal.vercel.app
   - Fitness: https://tomos-fitness.vercel.app
+  - Life: https://tomos-life.vercel.app
 - Swift/Xcode apps deprecated — PWAs are the canonical frontend
 - ntfy fully deprecated — all notifications via APNs
 - NLP task capture with smart date parsing (Sydney timezone)
@@ -591,7 +706,7 @@ TomOS/
 │   │   └── [id]/
 │   │       ├── actions/     # Note actions (archive, duplicate, etc.)
 │   │       └── backlinks/   # Reverse reference tracking
-│   ├── journal/             # Journal / Companion feature ⚡ NEW
+│   ├── journal/             # Journal / Companion feature
 │   │   ├── entries/         # CRUD for journal entries
 │   │   │   └── [id]/
 │   │   │       └── reflect/ # AI reflection generation
@@ -599,6 +714,12 @@ TomOS/
 │   │   ├── insights/        # Stats, mood patterns, theme trends
 │   │   ├── search/          # Full-text search with GIN index
 │   │   └── summary/         # Weekly/monthly AI summaries
+│   ├── life/                # Life module — personal planning
+│   │   ├── goals/           # Goal CRUD + [id] detail
+│   │   ├── habits/          # Habit CRUD + [id]/log + check-in
+│   │   ├── shopping/        # Shopping CRUD + check + clear + parse
+│   │   ├── plans/           # Weekly plan CRUD + current
+│   │   └── today/           # Aggregated dashboard snapshot
 │   ├── gym/                 # FitnessOS endpoints
 │   │   ├── exercises/       # Exercise CRUD
 │   │   ├── sessions/        # Gym session CRUD
@@ -634,7 +755,7 @@ TomOS/
 │   ├── journalPrompt.ts     # Three-layer prompt system for companion
 │   └── sydney-time.ts       # Sydney timezone utilities (getSydneyToday, getSydneyDayBounds)
 ├── prisma/
-│   ├── schema.prisma        # Database schema (Tasks + MatterOS + Notes + Journal + FitnessOS)
+│   ├── schema.prisma        # Database schema (Tasks + MatterOS + Notes + Journal + FitnessOS + Life)
 │   └── migrations/          # Migration history
 ├── types/
 │   └── matteros.ts          # MatterOS TypeScript types
