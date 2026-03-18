@@ -720,6 +720,11 @@ TomOS/
 │   │   ├── shopping/        # Shopping CRUD + check + clear + parse
 │   │   ├── plans/           # Weekly plan CRUD + current
 │   │   └── today/           # Aggregated dashboard snapshot
+│   ├── cron/
+│   │   ├── gym-suggestion/  # Morning gym push (GitHub Actions)
+│   │   ├── legal-deadlines/ # Legal deadline scan (Vercel cron)
+│   │   ├── strava-token-refresh/ # Proactive token refresh
+│   │   └── life-morning/    # Morning habits/priorities push (Vercel cron)
 │   ├── gym/                 # FitnessOS endpoints
 │   │   ├── exercises/       # Exercise CRUD
 │   │   ├── sessions/        # Gym session CRUD
@@ -913,6 +918,7 @@ Returns all tasks sorted by priority and due date, limited to 100 tasks.
 |-----|---------|----------|---------|
 | `gym-suggestion` | GitHub Actions (`scheduled-notifications.yml`) | 6:30am Sydney (19:30 UTC) | Morning push with session type + suggested weights |
 | `legal-deadlines` | Vercel Cron (`vercel.json`) | 6am Sydney (19:00 UTC prev day) | Scans active matters for overdue/upcoming deadlines, legal-tagged tasks, stale matters (90d) |
+| `life-morning` | Vercel Cron (`vercel.json`) | 6:15am Sydney (19:15 UTC prev day) | Morning push with habits, priorities, urgent tasks, shopping count |
 
 Both endpoints also accept manual `POST` triggers for testing.
 
