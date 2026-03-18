@@ -525,7 +525,7 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 
 ---
 
-## Current Status (Updated 2026-03-06)
+## Current Status (Updated 2026-03-18)
 
 ### Completed
 - iOS/macOS push notifications working (both devices registered)
@@ -534,6 +534,7 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 - **FitnessOS** — Running-first fitness tracker with gym sessions, Strava sync, HR zones, weekly dashboard, recovery
 - **Coach API (2026-03-06)** — 7 endpoints for Claude running coach, CoachPrescription model, training calendar
 - **Sydney timezone fix (2026-03-06)** — `lib/sydney-time.ts` replaces broken `toLocaleString`+`setHours` pattern
+- **Life module (2026-03-17)** — Schema + 15 API endpoints
 - **TomOS Web Apps** — 5 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
   - Tasks: https://tomos-tasks.vercel.app
   - Notes: https://tomos-notes.vercel.app
@@ -550,6 +551,12 @@ Exports: `JOURNAL_BASE_PROMPT`, `REFLECTION_PROMPT`, `WEEKLY_SUMMARY_PROMPT`, `b
 - **Gym suggestion cron** — Scheduled via GitHub Actions at 6:30am Sydney
 - **Legal deadlines cron** — Scheduled via Vercel at 6am Sydney
 - **Phase 2 (2026-02-26):** Subtasks (parentId self-relation), smart linking expanded, work MBP docs
+
+### Recent Fixes (2026-03-18)
+- **Tasks PWA fix:** Root `vercel.json` was changed to build `@tomos/fitness` (during FitnessOS session), causing `tomos-tasks.vercel.app` to serve FitnessOS. Reverted to tasks build; `apps/fitness/vercel.json` created for independent fitness CLI deploys.
+- **`/api/all-tasks` context/energy/time extraction:** Endpoint now correctly extracts prefix-tagged values (`context:Work`, `energy:Low`, `time:Quick`) from the tags array — previously always returned null.
+- **`/api/tasks` endpoint (new):** Added GET + POST with full status/priority mapping and `{ success, tasks, pagination }` response shape.
+- **`/api/matters` field aliases:** Added `entity`→`client` and `matter_type`→`type` aliases for CC skills compatibility.
 
 ### Recent Fixes (2026-01-05)
 - **VERCEL_URL Fix:** Scheduled notifications (morning-overview, eod-summary) now use
