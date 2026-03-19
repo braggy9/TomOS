@@ -874,3 +874,33 @@ model WeeklyPlan {
   @@index([status])
   @@index([weekStart])
 }
+
+// ============================================
+// RACE COSTS - Season race cost tracking
+// ============================================
+
+model RaceCost {
+  id           String   @id @default(uuid())
+  raceSlug     String   @unique
+  raceName     String
+  entryFee     Float?
+  entryPaid    Boolean  @default(false)
+  entryNote    String?
+  accomEst     Float?
+  accomBooked  Float?
+  accomNote    String?
+  travelEst    Float?
+  travelBooked Float?
+  travelNote   String?
+  gear         Float?
+  gearNote     String?
+  food         Float?
+  foodNote     String?
+  other        Float?
+  otherNote    String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("race_costs")
+}
