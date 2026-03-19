@@ -749,6 +749,15 @@ TomOS/
 │   │   └── sync/
 │   │       ├── strava/      # Webhook, manual, auth, callback
 │   │       └── garmin/      # Auth, callback, webhook, workouts (stubs)
+│   ├── training/            # Training plan + Race operations
+│   │   ├── blocks/          # Training block CRUD
+│   │   ├── weeks/           # Training week CRUD + current + reconcile
+│   │   ├── sessions/        # Planned session CRUD
+│   │   ├── today/           # Today's planned sessions
+│   │   ├── cleanup/         # Admin cleanup
+│   │   ├── race-logistics/  # Race Ops: Notion logistics + Postgres costs
+│   │   │   └── [raceId]/costs/  # PATCH race cost data
+│   │   └── parenting-schedule/  # Custody schedule from Notion
 │   ├── calendar/            # Google Calendar sync
 │   ├── email/               # Email-to-task processing
 │   ├── focus/               # Focus mode state
@@ -758,9 +767,11 @@ TomOS/
 │   └── cron/                # Scheduled jobs
 ├── lib/
 │   ├── journalPrompt.ts     # Three-layer prompt system for companion
-│   └── sydney-time.ts       # Sydney timezone utilities (getSydneyToday, getSydneyDayBounds)
+│   ├── sydney-time.ts       # Sydney timezone utilities (getSydneyToday, getSydneyDayBounds)
+│   ├── notion.ts            # Notion API client, block fetching, in-memory cache
+│   └── race-ops.ts          # Race types, Notion block parsers, fallback data, helpers
 ├── prisma/
-│   ├── schema.prisma        # Database schema (Tasks + MatterOS + Notes + Journal + FitnessOS + Life)
+│   ├── schema.prisma        # Database schema (Tasks + MatterOS + Notes + Journal + FitnessOS + Life + RaceCosts)
 │   └── migrations/          # Migration history
 ├── types/
 │   └── matteros.ts          # MatterOS TypeScript types
