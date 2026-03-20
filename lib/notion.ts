@@ -6,7 +6,7 @@ let client: Client | null = null;
 
 export function getNotionClient(): Client {
   if (!client) {
-    const auth = process.env.NOTION_API_KEY;
+    const auth = process.env.NOTION_API_KEY?.trim();
     if (!auth) throw new Error("NOTION_API_KEY not set");
     client = new Client({ auth });
   }
