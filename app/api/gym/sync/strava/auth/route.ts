@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     response_type: 'code',
     redirect_uri: redirectUri,
     approval_prompt: 'force',
-    scope: 'read,activity:read_all,activity:write,route:write',
+    scope: 'read,activity:read_all,activity:write',
     state,
   })
 
