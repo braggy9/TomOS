@@ -32,9 +32,11 @@ export async function GET(request: Request) {
     if (cached) return NextResponse.json({ success: true, data: cached });
 
     // Fetch data from multiple sources in parallel
+    let notionError: string | null = null;
     const [notionRaces, schedule, raceCalendar, dbCosts] = await Promise.all([
       fetchRaceLogisticsFromNotion().catch((e) => {
-        console.error("Notion race logistics fetch failed:", e.message);
+        notionError = e.message;
+        console.error("Notion race logistics fetch failed:", e.message, e.code, e.status);
         return null;
       }),
       fetchParentingScheduleFromNotion().catch((e) => {
@@ -85,10 +87,11 @@ export async function GET(request: Request) {
         return a.date.localeCompare(b.date);
       });
 
-    const response: RaceLogisticsResponse = {
+    const response: RaceLogisticsResponse & { _notionError?: string; _notionSource?: string } = {
       lastFetched: new Date().toISOString(),
       races,
       seasonCost: calculateSeasonCost(races),
+      ...(notionError ? { _notionError: notionError, _notionSource: "fallback" } : { _notionSource: "notion" }),
     };
 
     // Cache for 15 minutes
