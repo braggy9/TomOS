@@ -1,5 +1,6 @@
 import {
   fetchAllBlocks,
+  fetchAllBlocksDeep,
   fetchBlocksWithChildren,
   getBlockText,
   extractPlainText,
@@ -329,8 +330,7 @@ function parseRaceSection(blocks: NotionBlock[]): Partial<RaceCard> | null {
       continue;
     }
 
-    if (block.type === "paragraph" && !currentSection) {
-      // Metadata line (before any h3)
+    if (block.type === "paragraph") {
       const richText = block.paragraph?.rich_text;
       if (!richText?.length) continue;
       const kv = extractBoldKeyValue(richText);
@@ -467,7 +467,7 @@ export async function fetchRaceLogisticsFromNotion(): Promise<Partial<RaceCard>[
   const pageId = process.env.NOTION_RACE_LOGISTICS_PAGE_ID;
   if (!pageId) throw new Error("NOTION_RACE_LOGISTICS_PAGE_ID not set");
 
-  const blocks = await fetchAllBlocks(pageId);
+  const blocks = await fetchAllBlocksDeep(pageId);
   return parseRaceLogisticsBlocks(blocks);
 }
 

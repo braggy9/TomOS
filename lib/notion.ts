@@ -41,6 +41,26 @@ export async function fetchAllBlocks(blockId: string): Promise<NotionBlock[]> {
   return blocks;
 }
 
+/**
+ * Fetch all blocks recursively, flattening children inline (depth-first).
+ * Returns a flat array where each block is immediately followed by its
+ * descendants — the structure parseRaceLogisticsBlocks expects.
+ */
+export async function fetchAllBlocksDeep(blockId: string): Promise<NotionBlock[]> {
+  const topLevel = await fetchAllBlocks(blockId);
+  const result: NotionBlock[] = [];
+
+  for (const block of topLevel) {
+    result.push(block);
+    if (block.has_children) {
+      const children = await fetchAllBlocksDeep(block.id);
+      result.push(...children);
+    }
+  }
+
+  return result;
+}
+
 /** Fetch blocks + children for blocks that have them (tables, toggles) */
 export async function fetchBlocksWithChildren(
   blockId: string,
