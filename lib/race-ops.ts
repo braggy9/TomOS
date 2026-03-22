@@ -323,8 +323,17 @@ function parseRaceSection(blocks: NotionBlock[]): Partial<RaceCard> | null {
     }
 
     if (block.type === "to_do") {
+      const text = getBlockText(block);
+      // Some to_do items are metadata (key: value) not action items — extract and skip
+      if (isMetadataItem(text)) {
+        const colonIdx = text.indexOf(":");
+        if (colonIdx !== -1) {
+          applyMetadata(race, text.slice(0, colonIdx).trim(), text.slice(colonIdx + 1).trim());
+        }
+        continue;
+      }
       currentChecklist.push({
-        text: getBlockText(block),
+        text,
         checked: block.to_do?.checked ?? false,
       });
       continue;
@@ -374,6 +383,20 @@ function shortenRaceName(name: string): string {
     .trim();
 }
 
+// Keys that indicate a to_do item is metadata (key: value), not an action checklist item
+const METADATA_KEY_PREFIXES = [
+  "race shoes", "target", "hydration", "mode", "distance", "drive time",
+  "who", "where", "notes", "dates covered", "who's helping", "transport",
+  "fly time", "flight", "accommodation type", "status", "days out",
+];
+
+function isMetadataItem(text: string): boolean {
+  const colonIdx = text.indexOf(":");
+  if (colonIdx === -1 || colonIdx === text.length - 1) return false;
+  const key = text.slice(0, colonIdx).toLowerCase().trim();
+  return METADATA_KEY_PREFIXES.some((p) => key === p || key.startsWith(p));
+}
+
 function applyMetadata(race: Partial<RaceCard>, key: string, value: string): void {
   const k = key.toLowerCase();
   if (k === "distance") race.distance = value;
@@ -385,9 +408,12 @@ function applyMetadata(race: Partial<RaceCard>, key: string, value: string): voi
     if (v.includes("solo") || v.includes("no")) race.kidsWeek = false;
     if (v.includes("tbc")) race.kidsWeek = null;
     race.custodyNote = value;
-  } else if (k === "race shoes") race.raceShoes = value;
-  else if (k === "target") race.target = value;
-  else if (k === "status") race.entryStatus = mapEntryStatus(value);
+  } else if (k === "race shoes") race.raceShoes = value.replace(/^:\s*/, "");
+  else if (k === "target") race.target = value.replace(/^:\s*/, "");
+  else if (k === "notes") {
+    // Append notes (multiple notes sections may exist)
+    race.notes = race.notes ? `${race.notes} ${value}` : value;
+  } else if (k === "status") race.entryStatus = mapEntryStatus(value);
 }
 
 function assignChecklist(race: Partial<RaceCard>, section: string, items: ChecklistItem[]): void {
