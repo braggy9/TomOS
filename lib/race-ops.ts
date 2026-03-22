@@ -342,16 +342,34 @@ function parseRaceSection(blocks: NotionBlock[]): Partial<RaceCard> | null {
     if (block.type === "paragraph") {
       const richText = block.paragraph?.rich_text;
       if (!richText?.length) continue;
+      // Try bold key:value first, then plain "Key: value | Key: value" pipe-separated lines
       const kv = extractBoldKeyValue(richText);
-      if (kv) applyMetadata(race, kv.key, kv.value);
+      if (kv) {
+        applyMetadata(race, kv.key, kv.value);
+      } else {
+        const fullText = richText.map((r: any) => r.plain_text || "").join("");
+        for (const part of fullText.split("|")) {
+          const colonIdx = part.indexOf(":");
+          if (colonIdx > 0) {
+            applyMetadata(race, part.slice(0, colonIdx).trim(), part.slice(colonIdx + 1).trim());
+          }
+        }
+      }
     }
 
     if (block.type === "bulleted_list_item" && currentSection) {
-      // Some checklist items might be bulleted lists instead of to_do
-      currentChecklist.push({
-        text: getBlockText(block),
-        checked: getBlockText(block).includes("✅") || getBlockText(block).includes("Done"),
-      });
+      const text = getBlockText(block);
+      if (isMetadataItem(text)) {
+        const colonIdx = text.indexOf(":");
+        if (colonIdx !== -1) {
+          applyMetadata(race, text.slice(0, colonIdx).trim(), text.slice(colonIdx + 1).trim());
+        }
+      } else {
+        currentChecklist.push({
+          text,
+          checked: text.includes("✅") || text.includes("Done"),
+        });
+      }
     }
   }
 
