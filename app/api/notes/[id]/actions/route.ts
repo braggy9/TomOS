@@ -130,7 +130,7 @@ async function unarchiveNote(noteId: string) {
   });
 }
 
-// Convert note to task
+// Convert note to Todoist task
 async function convertToTask(noteId: string, context?: string) {
   const note = await prisma.note.findUnique({
     where: { id: noteId }
@@ -143,28 +143,43 @@ async function convertToTask(noteId: string, context?: string) {
     );
   }
 
-  // Create task from note
-  const task = await prisma.task.create({
-    data: {
-      title: note.title,
-      description: note.content,
-      status: 'todo',
-      priority: note.priority === 'urgent' ? 'urgent' : note.priority === 'high' ? 'important' : 'someday',
-      matterId: note.matterId,
-      // Add note reference in description
-      notes: {
-        connect: { id: note.id }
-      }
-    }
+  const todoistApiKey = process.env.TODOIST_API_KEY;
+  if (!todoistApiKey) {
+    return NextResponse.json(
+      { error: 'TODOIST_API_KEY not configured' },
+      { status: 503 }
+    );
+  }
+
+  // Map priority: urgent→p1, high→p2, medium→p3, low→p4
+  const priorityMap: Record<string, number> = { urgent: 1, high: 2, medium: 3, low: 4 };
+  const todoistPriority = priorityMap[note.priority ?? 'medium'] ?? 3;
+
+  const todoistRes = await fetch('https://api.todoist.com/rest/v2/tasks', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${todoistApiKey}`,
+    },
+    body: JSON.stringify({
+      content: note.title,
+      description: note.content ? note.content.slice(0, 1000) : undefined,
+      priority: todoistPriority,
+    }),
   });
 
-  // Link the note to the created task
+  if (!todoistRes.ok) {
+    const err = await todoistRes.text();
+    console.error('[notes/actions] Todoist API error:', err);
+    return NextResponse.json({ error: 'Failed to create Todoist task' }, { status: 502 });
+  }
+
+  const todoistTask = await todoistRes.json();
+
+  // Archive the note
   await prisma.note.update({
     where: { id: noteId },
-    data: {
-      taskId: task.id,
-      status: 'archived' // Archive the note since it's now a task
-    }
+    data: { status: 'archived' }
   });
 
   return NextResponse.json({
@@ -172,7 +187,7 @@ async function convertToTask(noteId: string, context?: string) {
     action: 'convert-to-task',
     data: {
       note: { id: note.id, title: note.title },
-      task: { id: task.id, title: task.title }
+      task: { id: todoistTask.id, content: todoistTask.content, url: todoistTask.url }
     }
   });
 }

@@ -152,28 +152,45 @@ export async function POST(request: NextRequest) {
     // Matter ref not found — fall through to task creation
   }
 
-  // ── Route 3: Task (default) ────────────────────────────────────────────────
-  const taskText = body || cleanSubject
-  const taskRes = await fetch(
-    'https://tomos-task-api.vercel.app/api/task',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task: taskText,
-        source: `Email (${from})`,
-      }),
-    }
-  )
+  // ── Route 3: Task (default) → Todoist ────────────────────────────────────
+  const todoistApiKey = process.env.TODOIST_API_KEY
+  if (!todoistApiKey) {
+    console.error('[email/inbound] TODOIST_API_KEY not set — task creation skipped')
+    return NextResponse.json({
+      success: false,
+      route: 'task_skipped',
+      reason: 'TODOIST_API_KEY not configured',
+      from,
+      subject,
+    }, { status: 503 })
+  }
 
-  const taskResult = await taskRes.json()
+  const todoistRes = await fetch('https://api.todoist.com/rest/v2/tasks', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${todoistApiKey}`,
+    },
+    body: JSON.stringify({
+      content: cleanSubject,
+      description: body && body !== cleanSubject ? `From: ${from}\n\n${body}` : `From: ${from}`,
+    }),
+  })
+
+  if (!todoistRes.ok) {
+    const err = await todoistRes.text()
+    console.error('[email/inbound] Todoist API error:', err)
+    return NextResponse.json({ success: false, route: 'task', error: 'Todoist API error' }, { status: 502 })
+  }
+
+  const todoistTask = await todoistRes.json()
 
   return NextResponse.json({
     success: true,
     route: 'task',
     from,
     subject,
-    taskId: taskResult.taskId,
-    parsedTask: taskResult.parsedTask,
+    taskId: todoistTask.id,
+    taskContent: todoistTask.content,
   })
 }

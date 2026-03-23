@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
  * - Active habits + today's completion
  * - Unchecked shopping items count
  * - Current week's priorities
- * - Top 5 open tasks by priority/due
+ * - Tasks: [] (migrated to Todoist)
  * - Last journal mood/energy
  * - Today's coach prescription (if any)
  */
@@ -34,7 +34,6 @@ export async function GET() {
       habits,
       shoppingCount,
       weeklyPlan,
-      tasks,
       lastJournalEntry,
       coachPrescription,
     ] = await Promise.all([
@@ -59,26 +58,7 @@ export async function GET() {
         where: { weekStart: monday },
       }),
 
-      // 4. Top 5 open tasks by priority/due
-      prisma.task.findMany({
-        where: {
-          status: { in: ['todo', 'in_progress'] },
-        },
-        orderBy: [
-          { priority: 'asc' }, // urgent first (alphabetical: high, low, medium, urgent)
-          { dueDate: 'asc' },
-        ],
-        take: 5,
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          priority: true,
-          dueDate: true,
-        },
-      }),
-
-      // 5. Last journal entry mood/energy
+      // 4. Last journal entry mood/energy
       prisma.journalEntry.findFirst({
         orderBy: { entryDate: 'desc' },
         select: {
@@ -90,7 +70,7 @@ export async function GET() {
         },
       }),
 
-      // 6. Today's coach prescription
+      // 5. Today's coach prescription
       prisma.coachPrescription.findFirst({
         where: {
           date: { gte: startOfDay, lte: endOfDay },
@@ -120,18 +100,6 @@ export async function GET() {
         streak: habit.streakCurrent,
       }))
 
-    // Sort tasks with proper priority ordering
-    const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
-    const sortedTasks = tasks.sort((a, b) => {
-      const pa = priorityOrder[a.priority] ?? 2
-      const pb = priorityOrder[b.priority] ?? 2
-      if (pa !== pb) return pa - pb
-      if (a.dueDate && b.dueDate) return a.dueDate.getTime() - b.dueDate.getTime()
-      if (a.dueDate) return -1
-      if (b.dueDate) return 1
-      return 0
-    })
-
     return NextResponse.json({
       success: true,
       data: {
@@ -154,7 +122,7 @@ export async function GET() {
               status: weeklyPlan.status,
             }
           : null,
-        tasks: sortedTasks,
+        tasks: [], // Tasks migrated to Todoist — use Todoist MCP for task data
         journal: lastJournalEntry
           ? {
               mood: lastJournalEntry.mood,
