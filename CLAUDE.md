@@ -2,7 +2,7 @@
 
 ## What This Repo Is
 
-Next.js serverless API providing task management, APNs push notifications, and AI-powered features for the TomOS ecosystem.
+Next.js serverless API providing APNs push notifications, legal matter management, notes, journal, fitness, and life planning for the TomOS ecosystem. **Task management migrated to Todoist (2026-03-23).**
 
 **Technology:** Next.js 14 App Router, TypeScript, Vercel serverless functions
 **Deployment:** Vercel (Project ID: `prj_8jEVBTn5EAfmPOc5qcOrJ6VYE2Wr`)
@@ -639,7 +639,7 @@ Life is the **orchestration layer** — reads from other modules but only owns g
 
 ---
 
-## Current Status (Updated 2026-03-19)
+## Current Status (Updated 2026-03-23)
 
 ### Completed
 - iOS/macOS push notifications working (both devices registered)
@@ -649,8 +649,7 @@ Life is the **orchestration layer** — reads from other modules but only owns g
 - **Coach API (2026-03-06)** — 7 endpoints for Claude running coach, CoachPrescription model, training calendar
 - **Sydney timezone fix (2026-03-06)** — `lib/sydney-time.ts` replaces broken `toLocaleString`+`setHours` pattern
 - **Life module (2026-03-17)** — Schema + 15 API endpoints + PWA
-- **TomOS Web Apps** — 6 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
-  - Tasks: https://tomos-tasks.vercel.app
+- **TomOS Web Apps** — 5 Next.js PWAs in monorepo at `/Users/tombragg/Desktop/Projects/tomos-web/`
   - Notes: https://tomos-notes.vercel.app
   - Matters: https://tomos-matters.vercel.app
   - Journal: https://tomos-journal.vercel.app
@@ -658,20 +657,18 @@ Life is the **orchestration layer** — reads from other modules but only owns g
   - Life: https://tomos-life.vercel.app
 - Swift/Xcode apps deprecated — PWAs are the canonical frontend
 - ntfy fully deprecated — all notifications via APNs
-- NLP task capture with smart date parsing (Sydney timezone)
-- 15-minute reminder notifications via APNs
-- Batch task import with AI parsing
-- Google Calendar sync (optional)
 - Automatic device deactivation on APNs 410 errors
 - **Gym suggestion cron** — Scheduled via GitHub Actions at 6:30am Sydney
 - **Legal deadlines cron** — Scheduled via Vercel at 6am Sydney
-- **Phase 2 (2026-02-26):** Subtasks (parentId self-relation), smart linking expanded, work MBP docs
+- **`/api/matters` field aliases:** Added `entity`→`client` and `matter_type`→`type` aliases for CC skills compatibility
 
-### Recent Fixes (2026-03-18)
-- **Tasks PWA fix:** Root `vercel.json` was changed to build `@tomos/fitness` (during FitnessOS session), causing `tomos-tasks.vercel.app` to serve FitnessOS. Reverted to tasks build; `apps/fitness/vercel.json` created for independent fitness CLI deploys.
-- **`/api/all-tasks` context/energy/time extraction:** Endpoint now correctly extracts prefix-tagged values (`context:Work`, `energy:Low`, `time:Quick`) from the tags array — previously always returned null.
-- **`/api/tasks` endpoint (new):** Added GET + POST with full status/priority mapping and `{ success, tasks, pagination }` response shape.
-- **`/api/matters` field aliases:** Added `entity`→`client` and `matter_type`→`type` aliases for CC skills compatibility.
+### Todoist Migration (2026-03-23)
+- **Tasks PWA removed** from tomos-web monorepo — migrated to Todoist + MCP
+- **`/api/task`, `/api/tasks`, `/api/all-tasks`** routes deleted from backend
+- **email/inbound fallback** rewired: unmatched emails now create Todoist tasks via REST API (requires `TODOIST_API_KEY` env var — set ✅)
+- **notes `convert-to-task` action** rewired to Todoist REST API
+- **`/api/life/today`** — task query removed (table now empty; `tasks: []` returned)
+- Neon `Task` table schema retained (empty) — safe to drop in future if desired
 
 ### Recent Fixes (2026-01-05)
 - **VERCEL_URL Fix:** Scheduled notifications (morning-overview, eod-summary) now use
@@ -692,9 +689,6 @@ TomOS/
 ├── app/api/
 │   ├── register-device/     # APNs device token storage
 │   ├── send-push/           # APNs push notification sender
-│   ├── task/                # Single task creation + auto-push
-│   │   └── batch/           # Batch task import
-│   ├── tasks/               # Task management
 │   ├── matters/             # MatterOS - Legal matter management
 │   │   └── [id]/
 │   │       ├── documents/   # Matter documents
@@ -852,25 +846,7 @@ RESEND_API_KEY=re_xxx
 
 ## API Endpoints
 
-### Task Management
-
-**Create Single Task**
-```bash
-POST /api/task
-{
-  "task": "Review quarterly report tomorrow 2pm urgent",
-  "source": "Alfred"  # optional, defaults to "Alfred"
-}
-```
-
-**Batch Import Tasks**
-```bash
-POST /api/task/batch
-{
-  "tasks": "dentist tomorrow, review contract #urgent @john, prep slides for friday",
-  "source": "Batch Import"
-}
-```
+> **Note:** Task management routes (`/api/task`, `/api/tasks`, `/api/all-tasks`) were removed 2026-03-23. Tasks now live in Todoist. Use the Todoist REST API or MCP for task operations.
 
 ### APNs Device Registration
 
@@ -947,7 +923,7 @@ Routing logic (checked in order):
 1. Subject starts with `[MATTER]` or `MATTER:` → creates new matter (type: advisory, client guessed from body)
 2. Subject contains `#PUB-XXXX` (matter number) → note on existing matter + bumps `lastActivityAt`
 3. Subject contains `#some name` (fuzzy title search) → note on best-matching matter
-4. Fallback → NLP task creation via `/api/task` (Claude-parsed — extracts date, priority, context)
+4. Fallback → creates Todoist task via REST API (`TODOIST_API_KEY` env var — subject becomes task content, from address in description)
 
 Returns: `{ success, route: "new_matter"|"matter_note"|"task", ... }`
 
@@ -960,7 +936,7 @@ Returns: `{ success, route: "new_matter"|"matter_note"|"task", ... }`
 **Usage examples:**
 ```
 To: tasks@tomos.run
-Subject: Review vendor contract by Friday urgent     → task (Claude-parsed)
+Subject: Review vendor contract by Friday urgent     → Todoist task (subject as content)
 Subject: MATTER: Acme Corp Software License          → new matter
 Subject: #Acme NDA follow-up from today's call       → note on Acme NDA matter
 Subject: #PUB-2026-001 counterparty responded        → note on matter by number
