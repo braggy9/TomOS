@@ -108,6 +108,8 @@ export interface ParentingScheduleResponse {
 const MONTHS: Record<string, string> = {
   Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
   Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+  January: "01", February: "02", March: "03", April: "04", June: "06",
+  July: "07", August: "08", September: "09", October: "10", November: "11", December: "12",
 };
 
 export function generateSlug(name: string): string {
@@ -135,15 +137,15 @@ export function formatDateDisplay(dateStr: string): string {
 
 export function parseDateFromDisplay(text: string): string | null {
   if (!text || text.toLowerCase().startsWith("tbc")) return null;
-  // Try "6 Apr 2026" format
-  const match = text.match(/(\d{1,2})\s+(\w{3})\s+(\d{4})/);
+  // Try "6 Apr 2026" or "6 April 2026" format
+  const match = text.match(/(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/);
   if (match) {
     const [, day, mon, year] = match;
     const m = MONTHS[mon];
     if (m) return `${year}-${m}-${day.padStart(2, "0")}`;
   }
   // Try "26-28 Nov 2026" range format — use first date
-  const rangeMatch = text.match(/(\d{1,2})[-–]\d{1,2}\s+(\w{3})\s+(\d{4})/);
+  const rangeMatch = text.match(/(\d{1,2})[-–]\d{1,2}\s+([A-Za-z]{3,9})\s+(\d{4})/);
   if (rangeMatch) {
     const [, day, mon, year] = rangeMatch;
     const m = MONTHS[mon];
@@ -342,16 +344,26 @@ function parseRaceSection(blocks: NotionBlock[]): Partial<RaceCard> | null {
     if (block.type === "paragraph") {
       const richText = block.paragraph?.rich_text;
       if (!richText?.length) continue;
-      // Try bold key:value first, then plain "Key: value | Key: value" pipe-separated lines
-      const kv = extractBoldKeyValue(richText);
-      if (kv) {
-        applyMetadata(race, kv.key, kv.value);
-      } else {
-        const fullText = richText.map((r: any) => r.plain_text || "").join("");
+      const fullText = richText.map((r: any) => r.plain_text || "").join("");
+
+      // Pipe-separated metadata: "Distance: 21.1km | Type: Road | Location: Sydney"
+      // Must check for pipes BEFORE bold extraction — bold grabs the whole line as one value
+      if (fullText.includes("|")) {
         for (const part of fullText.split("|")) {
           const colonIdx = part.indexOf(":");
           if (colonIdx > 0) {
             applyMetadata(race, part.slice(0, colonIdx).trim(), part.slice(colonIdx + 1).trim());
+          }
+        }
+      } else {
+        // Single key:value — try bold extraction first
+        const kv = extractBoldKeyValue(richText);
+        if (kv) {
+          applyMetadata(race, kv.key, kv.value);
+        } else if (fullText.includes(":")) {
+          const colonIdx = fullText.indexOf(":");
+          if (colonIdx > 0) {
+            applyMetadata(race, fullText.slice(0, colonIdx).trim(), fullText.slice(colonIdx + 1).trim());
           }
         }
       }
@@ -383,7 +395,8 @@ function parseRaceSection(blocks: NotionBlock[]): Partial<RaceCard> | null {
 
 function parseRaceHeading(text: string): { name: string | null; dateStr: string | null } {
   // Format: "Race Name — 6 Apr 2026" or "Race Name — TBC Nov 2026"
-  const parts = text.split(/\s*[—–-]\s*/);
+  // Only split on em dash (—) or en dash (–), NOT hyphen (-) which appears in race names like "Ultra-Trail"
+  const parts = text.split(/\s*[—–]\s*/);
   if (parts.length < 2) return { name: text.trim() || null, dateStr: null };
   const name = parts[0].trim();
   const dateStr = parseDateFromDisplay(parts.slice(1).join(" ").trim());
