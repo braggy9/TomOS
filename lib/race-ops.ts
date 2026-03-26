@@ -137,17 +137,18 @@ export function formatDateDisplay(dateStr: string): string {
 
 export function parseDateFromDisplay(text: string): string | null {
   if (!text || text.toLowerCase().startsWith("tbc")) return null;
+  // Try range format first: "26-28 Nov 2026" — use first (start) date
+  // Must check before simple format, otherwise "28 Nov 2026" matches inside "26-28 Nov 2026"
+  const rangeMatch = text.match(/(\d{1,2})[-–]\d{1,2}\s+([A-Za-z]{3,9})\s+(\d{4})/);
+  if (rangeMatch) {
+    const [, day, mon, year] = rangeMatch;
+    const m = MONTHS[mon];
+    if (m) return `${year}-${m}-${day.padStart(2, "0")}`;
+  }
   // Try "6 Apr 2026" or "6 April 2026" format
   const match = text.match(/(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/);
   if (match) {
     const [, day, mon, year] = match;
-    const m = MONTHS[mon];
-    if (m) return `${year}-${m}-${day.padStart(2, "0")}`;
-  }
-  // Try "26-28 Nov 2026" range format — use first date
-  const rangeMatch = text.match(/(\d{1,2})[-–]\d{1,2}\s+([A-Za-z]{3,9})\s+(\d{4})/);
-  if (rangeMatch) {
-    const [, day, mon, year] = rangeMatch;
     const m = MONTHS[mon];
     if (m) return `${year}-${m}-${day.padStart(2, "0")}`;
   }
