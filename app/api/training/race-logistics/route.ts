@@ -62,7 +62,20 @@ export async function GET(request: Request) {
     // Apply entry statuses from Race Calendar table
     if (raceCalendar && raceCalendar.size > 0) {
       partialRaces = partialRaces.map((race) => {
-        const status = raceCalendar.get(race.id || "");
+        const raceId = race.id || "";
+        let status = raceCalendar.get(raceId);
+        if (!status) {
+          // Fallback: Race Calendar names sometimes omit the distance suffix
+          // e.g. logistics heading "Jabulani Challenge 22km" → id "jabulani-challenge-22km"
+          //      Race Calendar row "Jabulani Challenge"    → slug "jabulani-challenge"
+          const stripped = raceId.replace(/-\d+(?:km|mi)$/, "");
+          for (const [calSlug, calStatus] of raceCalendar) {
+            if (calSlug === stripped || calSlug.replace(/-\d+(?:km|mi)$/, "") === stripped) {
+              status = calStatus;
+              break;
+            }
+          }
+        }
         if (status) return { ...race, entryStatus: status };
         return race;
       });
