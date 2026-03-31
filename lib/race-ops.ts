@@ -159,8 +159,9 @@ export function mapEntryStatus(text: string): EntryStatus {
   const t = text.toLowerCase();
   if (t.includes("registered") || t.includes("✅")) return "registered";
   if (t.includes("transfer") || t.includes("chasing")) return "chasing";
-  if (t.includes("waitlist") || t.includes("⏳")) return "waitlisted";
+  if (t.includes("waitlist")) return "waitlisted";
   if (t.includes("dropped")) return "dropped";
+  if (t.includes("register") || t.includes("⏳")) return "tbc";
   return "tbc";
 }
 

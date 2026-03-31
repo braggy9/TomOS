@@ -8,6 +8,7 @@ const ALLOWED_ORIGINS = [
   "https://tomos-journal.vercel.app",
   "https://tomos-fitness.vercel.app",
   "https://tomos-dashboard.vercel.app",
+  "https://raceos-raceops.lovable.app",
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3002",
