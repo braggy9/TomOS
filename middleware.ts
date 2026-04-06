@@ -16,9 +16,16 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3004",
 ];
 
+function isOriginAllowed(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow any Lovable preview/deploy subdomain
+  if (origin.endsWith(".lovable.app")) return true;
+  return false;
+}
+
 export function middleware(request: NextRequest) {
   const origin = request.headers.get("origin") ?? "";
-  const isAllowed = ALLOWED_ORIGINS.includes(origin);
+  const isAllowed = isOriginAllowed(origin);
 
   // Handle preflight (OPTIONS) requests
   if (request.method === "OPTIONS") {
