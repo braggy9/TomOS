@@ -764,13 +764,9 @@ export function buildCompleteRaceCard(
     kidsWeek: partial.kidsWeek ?? null,
     custodyNote: partial.custodyNote || null,
     needsChildcare: partial.needsChildcare || false,
-    childcareSorted: partial.childcareSorted || false,
     needsAccommodation: partial.needsAccommodation || false,
-    accommodationSorted: partial.accommodationSorted || false,
     needsTravel: partial.needsTravel || false,
-    travelSorted: partial.travelSorted || false,
     needsMiloCare: partial.needsMiloCare || false,
-    miloCareSorted: partial.miloCareSorted || false,
     checklists: partial.checklists || {
       entry: [],
       kidsWeekLogistics: null,
@@ -780,6 +776,16 @@ export function buildCompleteRaceCard(
       gearNutrition: [],
       raceWeek: [],
     },
+    childcareSorted: partial.checklists?.kidsWeekLogistics
+      ? partial.checklists.kidsWeekLogistics.every((item) => item.checked)
+      : false,
+    accommodationSorted: partial.checklists?.accommodation
+      ? partial.checklists.accommodation.every((item) => item.checked)
+      : false,
+    travelSorted: partial.checklists?.travel?.length
+      ? partial.checklists.travel.every((item) => item.checked)
+      : false,
+    miloCareSorted: false,
     costs: dbCostToRaceCosts(dbCost),
     notes: partial.notes || null,
     raceShoes: partial.raceShoes || null,
