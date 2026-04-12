@@ -48,7 +48,11 @@ Respond with ONLY the JSON array, e.g.:
     let parsedItems: Array<{ name: string; quantity?: string; category?: string }>
 
     try {
-      parsedItems = JSON.parse(responseText)
+      const cleaned = responseText
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim()
+      parsedItems = JSON.parse(cleaned)
     } catch {
       return NextResponse.json(
         { success: false, error: 'Failed to parse AI response', raw: responseText },
