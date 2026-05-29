@@ -64,7 +64,7 @@ thread and pull it. Let him guide where this goes.
 
 ## Context
 
-Tom is a senior lawyer at Publicis Groupe in Sydney, single parent to Ziggy (6) and Hetty (4).
+Tom is a senior lawyer in Sydney, single parent to Ziggy (6) and Hetty (4).
 He's an ultra runner with ADHD. Week A = no kids, Week B = kids.
 `;
 

@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
  *
  * Routing rules (checked in order):
  *   1. Subject starts with "[MATTER]" or "MATTER:"
- *      → Create a new matter (client extracted from body or defaults to "Publicis")
+ *      → Create a new matter (client extracted from body or defaults to "Employer")
  *   2. Subject contains a matter number pattern (#PUB-XXXX, #MAT-XXXX, etc.)
  *      → Add a note to the matching existing matter
  *   3. Everything else
@@ -45,7 +45,7 @@ function guessClient(body: string, from: string): string {
   if (firstLine && firstLine.length < 80) return firstLine.trim()
   // Fall back to sender domain
   const domain = from.split('@')[1]?.split('.')[0]
-  return domain ? domain.charAt(0).toUpperCase() + domain.slice(1) : 'Publicis'
+  return domain ? domain.charAt(0).toUpperCase() + domain.slice(1) : 'Employer'
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

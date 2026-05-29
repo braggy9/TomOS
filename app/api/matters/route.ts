@@ -3,6 +3,11 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+/** Normalise an entity/"hat" value into a filterable tag, e.g. "The Bison" → "hat:the-bison". */
+function hatTag(entity: string): string {
+  return `hat:${entity.trim().toLowerCase().replace(/\s+/g, '-')}`;
+}
+
 /**
  * GET /api/matters
  * List all matters with optional filtering
@@ -15,6 +20,8 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get('priority');
     const client = searchParams.get('client');
     const type = searchParams.get('type');
+    const tag = searchParams.get('tag');
+    const hat = searchParams.get('hat');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
@@ -24,6 +31,9 @@ export async function GET(request: NextRequest) {
     if (priority) where.priority = priority;
     if (client) where.client = { contains: client, mode: 'insensitive' };
     if (type) where.type = type;
+    // Filter by an exact stored tag, or by "hat" (entity), persisted as a `hat:<entity>` tag.
+    if (tag) where.tags = { has: tag };
+    if (hat) where.tags = { has: hatTag(hat) };
 
     const [matters, total] = await Promise.all([
       prisma.matter.findMany({
@@ -89,6 +99,15 @@ export async function POST(request: NextRequest) {
     const type = body.type || body.matter_type;
     const client = body.client || body.entity;
 
+    // Persist the originating "hat" (entity) as a filterable tag. There is no entity
+    // column, so without this the value is discarded; storing it as `hat:<entity>` keeps
+    // matters filterable by which hat (employer / bison / mixtape / personal) they belong to.
+    const tags: string[] = Array.isArray(body.tags) ? [...body.tags] : [];
+    if (body.entity) {
+      const t = hatTag(body.entity);
+      if (!tags.includes(t)) tags.push(t);
+    }
+
     // Required fields
     if (!body.title || !client || !type) {
       return NextResponse.json(
@@ -116,7 +135,7 @@ export async function POST(request: NextRequest) {
         externalCounsel: body.externalCounsel || [],
         practiceArea: body.practiceArea || null,
         jurisdiction: body.jurisdiction || null,
-        tags: body.tags || [],
+        tags,
         counterparty: body.counterparty || null,
         counterpartyContact: body.counterpartyContact || null,
       },
