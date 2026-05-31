@@ -20,7 +20,7 @@ export interface SmartLinks {
  * Parse content to extract smart link mentions
  * Patterns:
  * - @task-title or @"task title with spaces"
- * - #matter-123 or #matter-PUB-2026-001
+ * - #matter-123 or #matter-MAT-2026-001
  * - &project-name or &"project name"
  * - [[note-title]] (wiki-style)
  */
@@ -42,7 +42,7 @@ export function parseSmartLinks(content: string): ParsedLink[] {
   }
 
   // Pattern 2: #matter mentions
-  // Matches: #PUB-2026-001, #matter-123, #"Matter Title", #single-word, #123
+  // Matches: #MAT-2026-001, #matter-123, #"Matter Title", #single-word, #123
   const matterPattern = /#(?:"([^"]+)"|([A-Z]{2,4}-\d{4}-\d{3}|matter-[a-zA-Z0-9-]+|\d+|[a-zA-Z][a-zA-Z0-9-_]*))/g;
 
   while ((match = matterPattern.exec(content)) !== null) {

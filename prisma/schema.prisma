@@ -123,7 +123,7 @@ model Matter {
   title          String
   description    String?  @db.Text
   client         String   // Client name (later: relation to Client table)
-  matterNumber   String?  @unique // e.g., "PUB-2026-001"
+  matterNumber   String?  @unique // e.g., "MAT-2026-001"
   type           String   // contract, dispute, compliance, advisory, employment, ip, regulatory
   status         String   @default("active") // active, on_hold, completed, archived
   priority       String   @default("medium") // low, medium, high, urgent

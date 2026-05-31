@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma'
  * Routing rules (checked in order):
  *   1. Subject starts with "[MATTER]" or "MATTER:"
  *      → Create a new matter (client extracted from body or defaults to "Employer")
- *   2. Subject contains a matter number pattern (#PUB-XXXX, #MAT-XXXX, etc.)
+ *   2. Subject contains a matter number pattern (#MAT-XXXX, etc.)
  *      → Add a note to the matching existing matter
  *   3. Everything else
  *      → Create a task via NLP parsing (existing behaviour)
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Route 2: Note on existing matter ──────────────────────────────────────
-  // Supports both number (#PUB-2026-001) and fuzzy name (#Acme NDA) formats
+  // Supports both number (#MAT-2026-001) and fuzzy name (#Acme NDA) formats
   const matterNumberMatch = cleanSubject.match(MATTER_NUMBER_RE)
   const matterNameMatch = matterNumberMatch ? null : cleanSubject.match(MATTER_NAME_RE)
   const matterRef = matterNumberMatch?.[1] ?? matterNameMatch?.[1]
