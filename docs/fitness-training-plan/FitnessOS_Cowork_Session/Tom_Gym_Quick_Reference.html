@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FitnessOS - Quick Reference</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a2e; color: #eee; padding: 16px; padding-bottom: 80px; }
+    h1 { font-size: 1.5rem; color: #00d4ff; margin-bottom: 16px; text-align: center; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; position: sticky; top: 0; background: #1a1a2e; padding: 8px 0; z-index: 10; }
+    .tab { flex: 1; padding: 12px 8px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+    .tab.a { background: #2E86AB33; color: #2E86AB; } .tab.b { background: #27AE6033; color: #27AE60; } .tab.c { background: #E74C3C33; color: #E74C3C; }
+    .tab.active.a { background: #2E86AB; color: #fff; } .tab.active.b { background: #27AE60; color: #fff; } .tab.active.c { background: #E74C3C; color: #fff; }
+    .session { display: none; } .session.active { display: block; }
+    .session-header { padding: 16px; border-radius: 12px; margin-bottom: 16px; }
+    .session-header.a { background: linear-gradient(135deg, #2E86AB22, #2E86AB44); border-left: 4px solid #2E86AB; }
+    .session-header.b { background: linear-gradient(135deg, #27AE6022, #27AE6044); border-left: 4px solid #27AE60; }
+    .session-header.c { background: linear-gradient(135deg, #E74C3C22, #E74C3C44); border-left: 4px solid #E74C3C; }
+    .session-header h2 { font-size: 1.2rem; margin-bottom: 4px; } .session-header p { font-size: 0.85rem; color: #aaa; }
+    .phase { margin-bottom: 20px; } .phase-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; padding-left: 8px; }
+    .exercise { background: #252542; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+    .exercise-name { font-weight: 600; font-size: 1rem; margin-bottom: 6px; }
+    .exercise-details { display: flex; gap: 16px; font-size: 0.85rem; color: #aaa; margin-bottom: 8px; }
+    .exercise-cue { font-size: 0.8rem; color: #00d4ff; font-style: italic; padding-top: 8px; border-top: 1px solid #333; }
+    .workout-card { background: #252542; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    .workout-card h4 { color: #E74C3C; margin-bottom: 8px; } .workout-card .note { font-size: 0.8rem; color: #888; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>FitnessOS</h1>
+  <div class="tabs">
+    <button class="tab a active" onclick="showSession('a')">Session A</button>
+    <button class="tab b" onclick="showSession('b')">Session B</button>
+    <button class="tab c" onclick="showSession('c')">Session C</button>
+  </div>
+  <div id="session-a" class="session active">
+    <div class="session-header a"><h2>Strength + Power</h2><p>Tuesday - 45-60 min</p></div>
+    <div class="phase"><div class="phase-title">Warm-up</div>
+      <div class="exercise"><div class="exercise-name">Foam Roll + Hip CARs + Glute Bridge + Dead Bug</div><div class="exercise-cue">10 min: Focus on hips and thoracic</div></div></div>
+    <div class="phase"><div class="phase-title">Power</div>
+      <div class="exercise"><div class="exercise-name">Box Jump OR KB Swing</div><div class="exercise-details"><span>3x5-8</span><span>90s rest</span></div><div class="exercise-cue">Step down from box; hip snap for swings</div></div></div>
+    <div class="phase"><div class="phase-title">Strength</div>
+      <div class="exercise"><div class="exercise-name">A1: RDL</div><div class="exercise-details"><span>3x6-8</span><span>90s rest</span></div><div class="exercise-cue">Hinge at hips, slight knee bend, back neutral</div></div>
+      <div class="exercise"><div class="exercise-name">A2: Pallof Press</div><div class="exercise-details"><span>3x10-12</span><span>60s rest</span></div><div class="exercise-cue">Anti-rotation, brace core</div></div>
+      <div class="exercise"><div class="exercise-name">B1: Bulgarian Split Squat</div><div class="exercise-details"><span>3x8-10 each</span><span>60s rest</span></div><div class="exercise-cue">Torso upright, drive through heel</div></div>
+      <div class="exercise"><div class="exercise-name">B2: DB Row</div><div class="exercise-details"><span>3x10-12</span><span>60s rest</span></div><div class="exercise-cue">Pull to hip, squeeze shoulder blade</div></div></div>
+    <div class="phase"><div class="phase-title">Accessory</div>
+      <div class="exercise"><div class="exercise-name">Hip Thrust</div><div class="exercise-details"><span>3x12-15</span><span>60s rest</span></div><div class="exercise-cue">Full hip extension, pause at top</div></div>
+      <div class="exercise"><div class="exercise-name">Copenhagen Plank</div><div class="exercise-details"><span>2x30s each</span><span>45s rest</span></div><div class="exercise-cue">Adductors engaged, body straight</div></div></div>
+  </div>
+  <div id="session-b" class="session">
+    <div class="session-header b"><h2>Upper + Core</h2><p>Friday - 40-50 min</p></div>
+    <div class="phase"><div class="phase-title">Push</div>
+      <div class="exercise"><div class="exercise-name">DB Bench Press</div><div class="exercise-details"><span>3x8-12</span><span>90s rest</span></div><div class="exercise-cue">Feet flat, natural arch, control descent</div></div>
+      <div class="exercise"><div class="exercise-name">DB Shoulder Press</div><div class="exercise-details"><span>3x8-10</span><span>90s rest</span></div><div class="exercise-cue">Core tight, no excessive lean</div></div></div>
+    <div class="phase"><div class="phase-title">Pull</div>
+      <div class="exercise"><div class="exercise-name">DB Row</div><div class="exercise-details"><span>3x10-12</span><span>60s rest</span></div><div class="exercise-cue">Pull to hip, control eccentric</div></div>
+      <div class="exercise"><div class="exercise-name">Lat Pulldown</div><div class="exercise-details"><span>3x8-10</span><span>60s rest</span></div><div class="exercise-cue">Lean back slightly, full stretch at top</div></div></div>
+    <div class="phase"><div class="phase-title">Core + Carries</div>
+      <div class="exercise"><div class="exercise-name">Farmers Carry</div><div class="exercise-details"><span>3x40m</span><span>60s rest</span></div><div class="exercise-cue">Tall posture, grip hard</div></div>
+      <div class="exercise"><div class="exercise-name">Hanging Leg Raise</div><div class="exercise-details"><span>3x10-12</span><span>60s rest</span></div><div class="exercise-cue">Control the swing, curl pelvis</div></div>
+      <div class="exercise"><div class="exercise-name">Bird Dog</div><div class="exercise-details"><span>2x10 each</span><span>45s rest</span></div><div class="exercise-cue">Opposite arm/leg, stable spine</div></div></div>
+  </div>
+  <div id="session-c" class="session">
+    <div class="session-header c"><h2>CrossFit Fun</h2><p>Flexible - 30-45 min</p></div>
+    <div class="phase"><div class="phase-title">Weekly Rotation</div>
+      <div class="workout-card"><h4>Week 1: AMRAP 15</h4><p>10 KB Swings + 10 Wall Balls + 10 Box Step-ups + 200m Row</p><div class="note">Pacing: steady, not sprint</div></div>
+      <div class="workout-card"><h4>Week 2: EMOM 20</h4><p>Min 1: 15 KB Swings | Min 2: 12 Goblet Squats | Min 3: 10 Burpees | Min 4: Rest</p><div class="note">Scale reps to finish with 10-15s rest</div></div>
+      <div class="workout-card"><h4>Week 3: Chipper</h4><p>50 Wall Balls + 40 KB Swings + 30 Box Jumps + 20 Thrusters + 10 Burpees</p><div class="note">Break as needed, steady pace</div></div>
+      <div class="workout-card"><h4>Week 4: For Time</h4><p>3 Rounds: 400m Row + 15 DB Thrusters + 15 Pull-ups</p><div class="note">Sub ring rows for pull-ups OK</div></div></div>
+  </div>
+  <script>function showSession(id){document.querySelectorAll('.session').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('session-'+id).classList.add('active');document.querySelector('.tab.'+id).classList.add('active');}</script>
+</body>
+</html>
