@@ -165,6 +165,21 @@ export function mapEntryStatus(text: string): EntryStatus {
   return "tbc";
 }
 
+/**
+ * A race-level `Status:` line is sometimes an entry status and sometimes a
+ * logistics summary (for example, "Items outstanding"). Only use it to set
+ * entry status when it names an actual entry state.
+ */
+function parseExplicitEntryStatus(text: string): EntryStatus | null {
+  const t = text.toLowerCase();
+  if (t.includes("registered") || t.includes("✅")) return "registered";
+  if (t.includes("transfer") || t.includes("chasing")) return "chasing";
+  if (t.includes("waitlist")) return "waitlisted";
+  if (t.includes("dropped")) return "dropped";
+  if (t.includes("register") || t.includes("⏳")) return "tbc";
+  return null;
+}
+
 export function calculateLogisticsStatus(race: Partial<RaceCard>): LogisticsStatus {
   const checklists = race.checklists;
   if (!checklists) return "outstanding";
@@ -392,6 +407,18 @@ function parseRaceSection(blocks: NotionBlock[]): Partial<RaceCard> | null {
     assignChecklist(race, currentSection, currentChecklist);
   }
 
+  // A completed entry item is structural evidence of registration. It must
+  // outrank a generic logistics warning, but not a deliberate waitlist/drop.
+  const hasCompletedRegistration = race.checklists?.entry.some((item) =>
+    item.checked && /\b(registered|paid)\b/i.test(item.text)
+  );
+  if (
+    hasCompletedRegistration &&
+    (!race.entryStatus || race.entryStatus === "tbc" || race.entryStatus === "chasing")
+  ) {
+    race.entryStatus = "registered";
+  }
+
   return race;
 }
 
@@ -446,7 +473,10 @@ function applyMetadata(race: Partial<RaceCard>, key: string, value: string): voi
   else if (k === "notes") {
     // Append notes (multiple notes sections may exist)
     race.notes = race.notes ? `${race.notes} ${value}` : value;
-  } else if (k === "status") race.entryStatus = mapEntryStatus(value);
+  } else if (k === "status") {
+    const entryStatus = parseExplicitEntryStatus(value);
+    if (entryStatus) race.entryStatus = entryStatus;
+  }
 }
 
 function assignChecklist(race: Partial<RaceCard>, section: string, items: ChecklistItem[]): void {
