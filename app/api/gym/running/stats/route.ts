@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 
+// Stats are derived from the live runningSync table and must not be frozen at
+// build time; Training Radar consumes this endpoint as current training data.
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/gym/running/stats
  * Running statistics — last 7 days, last 30 days, load trend
