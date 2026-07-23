@@ -904,3 +904,19 @@ model RaceCost {
 
   @@map("race_costs")
 }
+
+// ============================================
+// IMESSAGE SESSIONS - Blooio iMessage bridge
+// ============================================
+// Session-based conversation history for the iMessage bridge.
+// One row per sender phone number; resets after 30 min idle (handled in app).
+model ImessageSession {
+  id          String   @id @default(uuid())
+  phoneNumber String   @unique @map("phone_number")
+  messages    Json     @default("[]") // [{ role, content, timestamp }]
+  lastActive  DateTime @default(now()) @map("last_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("imessage_sessions")
+  @@index([lastActive])
+}
