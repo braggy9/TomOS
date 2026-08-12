@@ -13,6 +13,10 @@
       "schedule": "0 0 * * *"
     },
     {
+      "path": "/api/gym/sync/strava/manual",
+      "schedule": "30 20 * * *"
+    },
+    {
       "path": "/api/cron/life-morning",
       "schedule": "15 19 * * *"
     }
