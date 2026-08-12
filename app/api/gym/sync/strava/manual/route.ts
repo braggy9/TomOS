@@ -2,12 +2,45 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { getStravaAccessToken } from '@/lib/fitness/strava-auth'
 import { calculateTrainingLoad, classifyRunType, calculatePace } from '@/lib/fitness/running-load'
+import { authorizeCronRequest, parseStravaSyncDays } from '@/lib/fitness/strava-sync-request'
+
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/gym/sync/strava/manual
- * Manually sync running activities from Strava (last 30 days)
+ * Manually sync recent activities from Strava.
  */
 export async function POST(request: NextRequest) {
+  return handleSyncRequest(request, 90)
+}
+
+/**
+ * GET /api/gym/sync/strava/manual
+ * Daily Vercel Cron catch-up. Replays a rolling window so missed webhook
+ * deliveries are repaired without creating duplicate records.
+ */
+export async function GET(request: NextRequest) {
+  return handleSyncRequest(request, 14)
+}
+
+async function handleSyncRequest(request: NextRequest, defaultDays: number) {
+  const authorization = authorizeCronRequest(
+    request.headers.get('authorization'),
+    process.env.CRON_SECRET
+  )
+
+  if (authorization === 'missing-secret') {
+    console.error('CRON_SECRET is not configured - rejecting Strava sync')
+    return NextResponse.json(
+      { success: false, error: 'Strava sync authentication is not configured' },
+      { status: 503 }
+    )
+  }
+
+  if (authorization === 'unauthorized') {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const accessToken = await getStravaAccessToken()
     if (!accessToken) {
@@ -17,9 +50,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Accept ?days= parameter (default 90, max 365)
-    const daysParam = parseInt(request.nextUrl.searchParams.get('days') || '90')
-    const days = Math.min(Math.max(daysParam, 1), 365)
+    const days = parseStravaSyncDays(request.nextUrl.searchParams.get('days'), defaultDays)
     const after = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60
     const params = new URLSearchParams({
       after: String(after),
@@ -27,7 +58,7 @@ export async function POST(request: NextRequest) {
     })
 
     const res = await fetch(
-      `https://www.strava.com/api/v3/athlete/activities?${params}`,
+      `https://api-v3.strava.com/athlete/activities?${params}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     )
 
@@ -98,7 +129,7 @@ export async function POST(request: NextRequest) {
       let detail = null
       try {
         const detailRes = await fetch(
-          `https://www.strava.com/api/v3/activities/${activity.id}`,
+          `https://api-v3.strava.com/activities/${activity.id}`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         )
         if (detailRes.ok) {
@@ -167,15 +198,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const latestRun = await prisma.runningSync.findFirst({
+      orderBy: { date: 'desc' },
+      select: { date: true, externalId: true },
+    })
+
     return NextResponse.json({
       success: true,
       data: {
+        windowDays: days,
         synced,
         skipped,
         enriched,
         activitiesSynced,
         totalActivities: activities.length,
         runsFound: runs.length,
+        latestRun,
       },
     })
   } catch (error) {

@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     const activityRes = await fetch(
-      `https://www.strava.com/api/v3/activities/${activityId}`,
+      `https://api-v3.strava.com/activities/${activityId}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     )
 
