@@ -58,7 +58,7 @@ async function handleSyncRequest(request: NextRequest, defaultDays: number) {
     })
 
     const res = await fetch(
-      `https://api-v3.strava.com/athlete/activities?${params}`,
+      `https://www.strava.com/api/v3/athlete/activities?${params}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     )
 
@@ -129,7 +129,7 @@ async function handleSyncRequest(request: NextRequest, defaultDays: number) {
       let detail = null
       try {
         const detailRes = await fetch(
-          `https://api-v3.strava.com/activities/${activity.id}`,
+          `https://www.strava.com/api/v3/activities/${activity.id}`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         )
         if (detailRes.ok) {
