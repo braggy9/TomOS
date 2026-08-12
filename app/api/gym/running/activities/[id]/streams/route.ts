@@ -39,7 +39,7 @@ export async function GET(
     }
 
     const streamsRes = await fetch(
-      `https://api-v3.strava.com/activities/${activity.externalId}/streams?keys=heartrate,distance,latlng,altitude,cadence&key_type=distance`,
+      `https://www.strava.com/api/v3/activities/${activity.externalId}/streams?keys=heartrate,distance,latlng,altitude,cadence&key_type=distance`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     )
 
