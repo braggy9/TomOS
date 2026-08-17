@@ -205,7 +205,10 @@ async function handler(request: NextRequest) {
     const pushUrl = 'https://tomos-task-api.vercel.app/api/send-push'
     const pushRes = await fetch(pushUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+      },
       body: JSON.stringify({
         title,
         body,

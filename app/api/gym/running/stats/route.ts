@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { requireTrainingReadAccess } from '@/lib/server-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Stats are derived from the live runningSync table and must not be frozen at
@@ -10,6 +11,9 @@ export const dynamic = 'force-dynamic'
  * Running statistics — last 7 days, last 30 days, load trend
  */
 export async function GET(request: NextRequest) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const now = new Date()
     const last7 = new Date(now)

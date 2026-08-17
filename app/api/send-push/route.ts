@@ -5,6 +5,7 @@ import * as http2 from "http2";
 import * as jwt from "jsonwebtoken";
 import * as fs from "fs";
 import * as path from "path";
+import { requireCronAccess } from "@/lib/server-auth";
 
 /**
  * APNs Push Notification Endpoint
@@ -189,6 +190,9 @@ async function getActiveDevices(): Promise<Array<{ token: string; platform: stri
 }
 
 export async function POST(req: Request) {
+  const authError = requireCronAccess(req);
+  if (authError) return authError;
+
   try {
     const json = await req.json();
     const parsed = RequestBody.safeParse(json);
@@ -286,7 +290,10 @@ export async function POST(req: Request) {
 }
 
 // GET endpoint for testing/debugging
-export async function GET() {
+export async function GET(req: Request) {
+  const authError = requireCronAccess(req);
+  if (authError) return authError;
+
   const config = {
     APNS_KEY_ID: APNS_KEY_ID ? "configured" : "missing",
     APNS_TEAM_ID: APNS_TEAM_ID ? "configured" : "missing",

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { requireTrainingReadAccess } from '@/lib/server-auth'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +8,10 @@ export const dynamic = 'force-dynamic'
  * GET /api/training/recovery — Latest recovery check-in
  * Returns raw numeric values (1-5 scale) for dashboard meters.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const checkin = await prisma.recoveryCheckIn.findFirst({
       orderBy: { date: 'desc' },

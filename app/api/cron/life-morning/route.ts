@@ -112,7 +112,10 @@ export async function GET(request: NextRequest) {
     // Send push notification
     const pushRes = await fetch('https://tomos-task-api.vercel.app/api/send-push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+      },
       body: JSON.stringify({ title, body, badge: todaysHabits.length }),
     })
 
