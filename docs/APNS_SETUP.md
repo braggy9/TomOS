@@ -1,199 +1,162 @@
 # APNs Push Notification Setup
 
-This document explains how to configure Apple Push Notification service (APNs) for TomOS.
+This document describes the general TomOS Apple Push Notification service (APNs)
+broadcaster hosted by the `tomos-task-api` Vercel project.
 
-## Overview
+It is separate from the `tomos-nag` Cloudflare Worker and iPhone app. Both use
+the same Apple developer team, APNs authentication key, and bundle topic, but
+they have separate device registries and notification logic.
 
-TomOS uses APNs to send push notifications to iOS, iPadOS, and macOS devices. The implementation uses:
+## Current production state
 
-- **Token-based authentication** (JWT) - More secure and easier to manage than certificates
-- **HTTP/2 API** - Modern APNs protocol with better performance
-- **Notion database** - Stores device tokens for registered devices
+Verified 17 August 2026:
+
+- Backend: `https://tomos-task-api.vercel.app`
+- APNs topic / app bundle ID: `com.tomos.app`
+- Apple authentication: token-based ES256 JWT using a base64-encoded `.p8` key
+- Device registry: Neon Postgres table `device_tokens`
+- Active registrations: one macOS sandbox token
+- Inactive registrations: one iOS token
+- APNs host: sandbox (`api.sandbox.push.apple.com`)
+
+The Vercel project is currently configured with `APNS_ENVIRONMENT=development`.
+That is correct for the active development-signed macOS token. Do not switch it
+to `production` until the intended app is distributed with a production
+`aps-environment` entitlement and has re-registered a production token.
 
 ## Architecture
 
+```text
+TomOS iOS/macOS app
+  -> POST /api/register-device
+  -> Neon Postgres device_tokens
+
+Vercel cron or authenticated internal caller
+  -> POST /api/send-push
+  -> Apple APNs over HTTP/2
+  -> every active registered TomOS device
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  TomOS App   │────▶│   Vercel     │────▶│    APNs      │────▶│  iOS/macOS   │
-│  (iOS/Mac)   │     │   Backend    │     │   Servers    │     │   Device     │
-└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-       │                    │
-       │                    │
-       ▼                    ▼
-   Register            Query tokens
-   device token        from Notion
-```
 
-## Required Environment Variables
+The send route signs a short-lived APNs JWT, broadcasts the alert sequentially
+to active registrations, and deactivates tokens when Apple returns HTTP 410
+(`Unregistered`). The JWT is cached for up to 50 minutes.
 
-Add these to your Vercel project settings (Settings → Environment Variables):
+## Environment variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `APNS_KEY_ID` | Your APNs Key ID (10 characters) | `Z5X44X9KD7` |
-| `APNS_TEAM_ID` | Your Apple Developer Team ID | `89NX9R78Y7` |
-| `APNS_TOPIC` | App bundle identifier | `com.tomos.app` |
-| `APNS_ENVIRONMENT` | `development` or `production` | `development` |
-| `APNS_AUTH_KEY` | Contents of your .p8 key file | `-----BEGIN PRIVATE KEY-----\n...` |
-| `NOTION_DEVICE_TOKENS_DB_ID` | Notion database ID for device tokens | (auto-created) |
+Configure these on the `tomos-task-api` Vercel project:
 
-### Setting up APNS_AUTH_KEY
+| Variable | Purpose |
+|---|---|
+| `APNS_KEY_ID` | Apple APNs authentication key ID |
+| `APNS_TEAM_ID` | Apple Developer team ID |
+| `APNS_TOPIC` | Bundle ID; currently `com.tomos.app` |
+| `APNS_ENVIRONMENT` | `development` for sandbox or `production` for distribution builds |
+| `APNS_AUTH_KEY_BASE64` | Preferred: base64-encoded contents of the Apple `.p8` key |
+| `CRON_SECRET` | Bearer secret required by `/api/send-push` and cron routes |
+| `DATABASE_URL` | Neon Postgres connection containing `device_tokens` |
 
-The APNs authentication key is a .p8 file from Apple Developer. To add it to Vercel:
+`APNS_AUTH_KEY` with escaped newlines is supported as a fallback. A local
+`APNS_AUTH_KEY_PATH` is also supported for development only. Never commit the
+`.p8` key or include it in handovers.
 
-1. Open your `.p8` file in a text editor
-2. Copy the entire contents including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines
-3. In Vercel, create a new environment variable named `APNS_AUTH_KEY`
-4. Paste the key contents (Vercel handles multi-line values)
+## API endpoints
 
-**Important:** Never commit the .p8 file to version control!
+### `POST /api/register-device`
 
-## API Endpoints
+Registers or reactivates an iOS, iPadOS, or macOS token in Postgres.
 
-### POST /api/register-device
-
-Registers a device token for push notifications.
-
-**Request:**
 ```json
 {
-  "device_token": "a1b2c3d4e5f6...",
+  "device_token": "<APNs device token>",
   "platform": "ios",
   "bundle_id": "com.tomos.app",
-  "app_version": "1.0"
+  "name": "Tom's iPhone"
 }
 ```
 
-**Response:**
+The route currently has no caller authentication. APNs still accepts only valid
+tokens for the configured topic and environment, but registration authentication
+should be added before distributing the app beyond Tom-controlled devices.
+
+### `POST /api/send-push`
+
+Sends one alert to every active registration. This route requires
+`Authorization: Bearer $CRON_SECRET`.
+
 ```json
 {
-  "success": true,
-  "message": "Device token registered",
-  "device_id": "notion-page-id"
+  "title": "Training Radar needs attention",
+  "body": "2 slipped sessions | recovery check-in stale",
+  "badge": 2
 }
 ```
 
-### POST /api/send-push
+Optional fields are `task_id`, `priority`, `sound`, and `badge`. The route uses
+the `TASK_NOTIFICATION` APNs category.
 
-Sends a push notification to all registered devices.
+### `GET /api/send-push`
 
-**Request:**
-```json
-{
-  "title": "Task Reminder",
-  "body": "Review quarterly report - Due in 1 hour",
-  "task_id": "notion-page-id",
-  "priority": "urgent",
-  "badge": 1
-}
-```
+Returns a credential-presence and APNs-host diagnostic. It requires the same
+bearer secret and never returns credentials.
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Push notification sent to 2 device(s)",
-  "sent_to": 2,
-  "devices": ["a1b2c3d4... (iOS)", "e5f6g7h8... (macOS)"],
-  "errors": []
-}
-```
+## Current producers
 
-## Testing
+The following TomOS routes reuse `/api/send-push`:
 
-### Test with curl
+- Training Radar attention check: daily at `20:45 UTC`, after the Strava sync
+- Legal deadline check: daily at `19:00 UTC`
+- Life morning briefing: daily at `19:15 UTC`
+- Gym suggestion route when invoked
 
-**Register a device:**
+Training Radar skips the push when every check is healthy and nothing needs
+attention. Pushcut, Claude scheduled tasks, and Codex automations are not part of
+this delivery path.
+
+## Safe diagnostics
+
 ```bash
-curl -X POST https://tomos-task-api.vercel.app/api/register-device \
-  -H "Content-Type: application/json" \
-  -d '{
-    "device_token": "your-device-token-here",
-    "platform": "ios",
-    "bundle_id": "com.tomos.app",
-    "app_version": "1.0"
-  }'
+curl https://tomos-task-api.vercel.app/api/send-push \
+  -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-**Send a test notification:**
+Sending a test notification is a real external side effect:
+
 ```bash
 curl -X POST https://tomos-task-api.vercel.app/api/send-push \
   -H "Authorization: Bearer $CRON_SECRET" \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Test Notification",
-    "body": "This is a test push notification",
-    "task_id": "test-123",
-    "priority": "normal"
+    "title": "Test notification",
+    "body": "TomOS APNs delivery test",
+    "badge": 1
   }'
 ```
 
-**Check endpoint status:**
-```bash
-curl https://tomos-task-api.vercel.app/api/register-device
-curl https://tomos-task-api.vercel.app/api/send-push \
-  -H "Authorization: Bearer $CRON_SECRET"
-```
-
-### Local Testing
-
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-2. Create `.env.local` with your credentials:
-   ```
-   NOTION_API_KEY=your-notion-key
-   APNS_KEY_ID=Z5X44X9KD7
-   APNS_TEAM_ID=89NX9R78Y7
-   APNS_TOPIC=com.tomos.app
-   APNS_ENVIRONMENT=development
-   APNS_AUTH_KEY="-----BEGIN PRIVATE KEY-----
-   ...your key contents...
-   -----END PRIVATE KEY-----"
-   ```
-
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
-
-4. Test endpoints at `http://localhost:3000/api/...`
-
-## APNs Response Codes
-
-| Status | Reason | Action |
-|--------|--------|--------|
-| 200 | Success | Notification delivered to APNs |
-| 400 | BadDeviceToken | Remove device from database |
-| 403 | Forbidden | Check team ID and bundle ID |
-| 410 | Unregistered | Device uninstalled app, remove token |
-| 429 | TooManyRequests | Implement rate limiting |
-| 500 | InternalServerError | Retry with exponential backoff |
-
 ## Troubleshooting
 
-### "No active devices to notify"
-- Check Notion database has device entries with `Active = true`
-- Verify `NOTION_DEVICE_TOKENS_DB_ID` is set correctly
+### `No active devices to notify`
 
-### "APNs credentials not configured"
-- Verify all `APNS_*` environment variables are set in Vercel
-- Check for typos in variable names
+- Launch the intended app and allow notifications.
+- Confirm it called `/api/register-device` successfully.
+- Check the `device_tokens` row is active.
 
-### "BadDeviceToken"
-- Token may be invalid or expired
-- App may have been reinstalled (new token generated)
-- Check you're using the correct APNs environment (sandbox vs production)
+### `BadDeviceToken` or `DeviceTokenNotForTopic`
 
-### "MissingTopic"
-- Ensure `APNS_TOPIC` matches your app's bundle identifier
+- Check that the app bundle ID is `com.tomos.app`.
+- Check that the token environment matches `APNS_ENVIRONMENT`.
+- Reinstall and launch the app to obtain and register a current token.
 
-## Security Notes
+### `APNs credentials not configured`
 
-1. **Never commit credentials** - Use environment variables
-2. **Rotate keys periodically** - Generate new .p8 keys yearly
-3. **Use HTTPS only** - All API calls must use HTTPS
-4. **Validate tokens** - Tokens should be 64 hex characters
-5. **Rate limit** - APNs has rate limits; batch notifications when possible
+- Confirm the Vercel production environment contains `APNS_KEY_ID`,
+  `APNS_TEAM_ID`, and `APNS_AUTH_KEY_BASE64`.
+- Use the authenticated `GET /api/send-push` diagnostic to confirm the selected
+  topic, environment, and host.
+
+## Separate `tomos-nag` notifier
+
+`tomos-nag` is a narrower replacement notifier hosted on Cloudflare Workers. It
+reads timed tasks from Notion, stores device tokens and nag state in D1, and
+routes each token to sandbox or production APNs according to the environment
+reported by its iPhone app. Its canonical status is in the `tomos-nag`
+repository's `BUILD_STATUS.md`; do not configure it through this Vercel route.
