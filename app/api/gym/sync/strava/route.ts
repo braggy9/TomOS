@@ -2,6 +2,20 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { calculateTrainingLoad, classifyRunType, calculatePace } from '@/lib/fitness/running-load'
 import { getStravaAccessToken } from '@/lib/fitness/strava-auth'
+import { waitUntil } from '@vercel/functions'
+import { z } from 'zod'
+import {
+  recordIntegrationSyncAttempt,
+  recordIntegrationSyncFailure,
+  recordIntegrationSyncSuccess,
+  STRAVA_SYNC_PROVIDER,
+} from '@/lib/fitness/integration-sync-status'
+
+const stravaWebhookEventSchema = z.object({
+  object_type: z.string(),
+  aspect_type: z.string(),
+  object_id: z.number().int().positive(),
+})
 
 /**
  * GET /api/gym/sync/strava
@@ -43,18 +57,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 'hub.challenge': body['hub.challenge'] })
     }
 
-    // Only process new running activities
-    if (body.object_type !== 'activity' || body.aspect_type !== 'create') {
+    const event = stravaWebhookEventSchema.safeParse(body)
+    if (!event.success) {
+      return NextResponse.json({ received: false, error: 'Invalid webhook payload' }, { status: 400 })
+    }
+
+    // Only process newly created activities.
+    if (event.data.object_type !== 'activity' || event.data.aspect_type !== 'create') {
       return NextResponse.json({ received: true })
     }
 
-    const activityId = body.object_id
+    waitUntil(processStravaActivity(event.data.object_id))
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    console.error('Error accepting Strava webhook:', error)
+    return NextResponse.json({ received: false, error: 'Invalid webhook payload' }, { status: 400 })
+  }
+}
 
+async function processStravaActivity(activityId: number) {
+  const trigger = 'webhook'
+  await recordIntegrationSyncAttempt(STRAVA_SYNC_PROVIDER, {
+    trigger,
+    status: 'started',
+    activityId,
+  })
+
+  try {
     // Get token from DB (auto-refreshes if expired)
     const accessToken = await getStravaAccessToken()
     if (!accessToken) {
       console.error('No Strava token available — authorize via /api/gym/sync/strava/auth')
-      return NextResponse.json({ received: true, warning: 'Strava not authorized' })
+      await recordIntegrationSyncFailure(STRAVA_SYNC_PROVIDER, 'Strava not authorized', {
+        trigger,
+        status: 'failed',
+        activityId,
+      })
+      return
     }
 
     const activityRes = await fetch(
@@ -64,7 +103,12 @@ export async function POST(request: NextRequest) {
 
     if (!activityRes.ok) {
       console.error('Failed to fetch Strava activity:', activityRes.status)
-      return NextResponse.json({ received: true, warning: 'Failed to fetch activity' })
+      await recordIntegrationSyncFailure(
+        STRAVA_SYNC_PROVIDER,
+        `Strava activity fetch returned ${activityRes.status}`,
+        { trigger, status: 'failed', activityId, httpStatus: activityRes.status }
+      )
+      return
     }
 
     const activity = await activityRes.json()
@@ -100,9 +144,22 @@ export async function POST(request: NextRequest) {
             activityName: activity.name || null,
           },
         })
-        return NextResponse.json({ received: true, synced: 'activity', type: activity.type })
+        await recordIntegrationSyncSuccess(STRAVA_SYNC_PROVIDER, {
+          trigger,
+          status: 'succeeded',
+          activityId,
+          activityType: activity.type,
+        })
+        return
       }
-      return NextResponse.json({ received: true, skipped: `Unsupported type: ${activity.type}` })
+      await recordIntegrationSyncSuccess(STRAVA_SYNC_PROVIDER, {
+        trigger,
+        status: 'succeeded',
+        activityId,
+        activityType: activity.type,
+        skipped: true,
+      })
+      return
     }
 
     // Parse splits from Strava splits_metric
@@ -182,13 +239,19 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({
-      received: true,
-      synced: runningSync.id,
+    await recordIntegrationSyncSuccess(STRAVA_SYNC_PROVIDER, {
+      trigger,
+      status: 'succeeded',
+      activityId,
+      syncedRunId: runningSync.id,
       matchedPlannedSession: planned?.id ?? null,
     })
   } catch (error) {
     console.error('Error processing Strava webhook:', error)
-    return NextResponse.json({ received: true, error: 'Processing failed' })
+    await recordIntegrationSyncFailure(STRAVA_SYNC_PROVIDER, error, {
+      trigger,
+      status: 'failed',
+      activityId,
+    })
   }
 }

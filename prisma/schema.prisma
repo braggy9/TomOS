@@ -474,6 +474,20 @@ model StravaToken {
   @@map("strava_tokens")
 }
 
+model IntegrationSyncStatus {
+  id            String   @id
+  provider      String   @unique
+  lastAttemptAt DateTime?
+  lastSuccessAt DateTime?
+  lastError     String?  @db.Text
+  lastResult    Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("integration_sync_status")
+  @@index([lastSuccessAt])
+}
+
 // ============================================
 // USER SETTINGS — Singleton fitness preferences
 // ============================================
