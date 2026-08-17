@@ -26,6 +26,15 @@ Full rules: https://github.com/braggy9/tomos-command-tower/blob/main/RULES.md
 - **API patterns:** REST, JSON responses. Some endpoints still return HTML (known bugs — check before assuming JSON)
 - **Todoist integration:** REST API v1 only (v2 returns 410). Priority inverted: 4=p1, 1=p4
 - **Auth:** Various — service account for Google Calendar, OAuth for Todoist (expires overnight), API tokens for Strava
+- **Strava sync operations:** Webhook ingestion, protected catch-up, and persistent health telemetry are documented in `docs/STRAVA_SYNC.md`.
+
+## Current Training Operations
+
+- `GET /api/gym/sync/strava/status` is the health source consumed by Training Radar.
+- Strava is stale when no successful sync has been recorded for 36 hours. This measures integration health, not whether Tom has trained recently.
+- `GET /api/gym/sync/strava/manual` is the protected 14-day cron catch-up; `POST` uses a 90-day default for manual recovery. Both require `CRON_SECRET`.
+- The Strava webhook validates event shape, acknowledges immediately, and finishes activity processing through Vercel background work.
+- Sync attempts, successes, failures, and result summaries are stored in `integration_sync_status`.
 
 ## Conventions
 
