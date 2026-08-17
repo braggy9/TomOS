@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStravaAccessToken } from '@/lib/fitness/strava-auth'
 import { calculateTrainingLoad, classifyRunType, calculatePace } from '@/lib/fitness/running-load'
 import { authorizeCronRequest, parseStravaSyncDays } from '@/lib/fitness/strava-sync-request'
+import {
+  recordIntegrationSyncAttempt,
+  recordIntegrationSyncFailure,
+  recordIntegrationSyncSuccess,
+  STRAVA_SYNC_PROVIDER,
+} from '@/lib/fitness/integration-sync-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,9 +47,16 @@ async function handleSyncRequest(request: NextRequest, defaultDays: number) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   }
 
+  const trigger = request.method === 'GET' ? 'cron' : 'manual'
+  await recordIntegrationSyncAttempt(STRAVA_SYNC_PROVIDER, { trigger, status: 'started' })
+
   try {
     const accessToken = await getStravaAccessToken()
     if (!accessToken) {
+      await recordIntegrationSyncFailure(STRAVA_SYNC_PROVIDER, 'Strava not authorized', {
+        trigger,
+        status: 'failed',
+      })
       return NextResponse.json(
         { success: false, error: 'No Strava token. Authorize first via /api/gym/sync/strava/auth' },
         { status: 401 }
@@ -65,6 +78,11 @@ async function handleSyncRequest(request: NextRequest, defaultDays: number) {
     if (!res.ok) {
       const errorText = await res.text()
       console.error('Strava API error:', res.status, errorText)
+      await recordIntegrationSyncFailure(
+        STRAVA_SYNC_PROVIDER,
+        `Strava API returned ${res.status}`,
+        { trigger, status: 'failed', httpStatus: res.status }
+      )
       return NextResponse.json(
         { success: false, error: 'Failed to fetch Strava activities' },
         { status: 502 }
@@ -203,21 +221,32 @@ async function handleSyncRequest(request: NextRequest, defaultDays: number) {
       select: { date: true, externalId: true },
     })
 
+    const result = {
+      trigger,
+      status: 'succeeded',
+      windowDays: days,
+      synced,
+      skipped,
+      enriched,
+      activitiesSynced,
+      totalActivities: activities.length,
+      runsFound: runs.length,
+    }
+    await recordIntegrationSyncSuccess(STRAVA_SYNC_PROVIDER, result)
+
     return NextResponse.json({
       success: true,
       data: {
-        windowDays: days,
-        synced,
-        skipped,
-        enriched,
-        activitiesSynced,
-        totalActivities: activities.length,
-        runsFound: runs.length,
+        ...result,
         latestRun,
       },
     })
   } catch (error) {
     console.error('Error during manual Strava sync:', error)
+    await recordIntegrationSyncFailure(STRAVA_SYNC_PROVIDER, error, {
+      trigger,
+      status: 'failed',
+    })
     return NextResponse.json(
       { success: false, error: 'Manual sync failed' },
       { status: 500 }

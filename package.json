@@ -20,6 +20,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@notionhq/client": "^2.2.15",
+    "@vercel/functions": "^3.9.3",
     "docx": "^8.5.0",
     "googleapis": "^168.0.0",
     "ics": "^3.7.6",
