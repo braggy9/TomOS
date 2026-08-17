@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireTrainingReadAccess } from '@/lib/server-auth'
 import {
   isIntegrationSyncStale,
   STRAVA_STALE_AFTER_HOURS,
@@ -8,7 +9,10 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   const [status, latestRun] = await Promise.all([
     prisma.integrationSyncStatus.findUnique({
       where: { provider: STRAVA_SYNC_PROVIDER },
@@ -37,4 +41,3 @@ export async function GET() {
     { headers: { 'Cache-Control': 'no-store' } }
   )
 }
-

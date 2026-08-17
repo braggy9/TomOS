@@ -11,7 +11,7 @@ Radar.
 | `/api/gym/sync/strava` | POST | Accept and process activity-created events | Strava webhook delivery |
 | `/api/gym/sync/strava/manual` | GET | Idempotent 14-day cron catch-up | Bearer `CRON_SECRET` |
 | `/api/gym/sync/strava/manual` | POST | Manual catch-up, default 90 days | Bearer `CRON_SECRET` |
-| `/api/gym/sync/strava/status` | GET | Current sync telemetry and latest run date | Read-only public API |
+| `/api/gym/sync/strava/status` | GET | Current sync telemetry and latest run date | Protected by `TOMOS_TRAINING_READ_TOKEN` |
 
 Manual sync accepts `?days=N`; values are validated and bounded by
 `lib/fitness/strava-sync-request.ts`. Do not place `CRON_SECRET` in the query
@@ -70,7 +70,8 @@ curl -fsS \
 After a catch-up, verify both the result and the independent status route:
 
 ```bash
-curl -fsS https://tomos-task-api.vercel.app/api/gym/sync/strava/status
+curl -fsS https://tomos-task-api.vercel.app/api/gym/sync/strava/status \
+  -H "Authorization: Bearer $TOMOS_TRAINING_READ_TOKEN"
 ```
 
 Do not call the catch-up merely because `latestActivityAt` is old. First check

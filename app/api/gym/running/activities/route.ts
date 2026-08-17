@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { requireTrainingReadAccess } from '@/lib/server-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
@@ -6,6 +7,9 @@ import { NextRequest, NextResponse } from 'next/server'
  * List running activities with pagination and optional days filter
  */
 export async function GET(request: NextRequest) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const searchParams = request.nextUrl.searchParams
     const days = parseInt(searchParams.get('days') || '30')

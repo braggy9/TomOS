@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTrainingReadAccess } from "@/lib/server-auth";
 import {
   getCached,
   setCache,
@@ -23,6 +24,9 @@ import {
 const CACHE_KEY = "race-logistics";
 
 export async function GET(request: Request) {
+  const authError = requireTrainingReadAccess(request);
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(request.url);
     const refresh = searchParams.get("refresh") === "true";

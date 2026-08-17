@@ -118,6 +118,7 @@ curl -X POST https://tomos-task-api.vercel.app/api/register-device \
 **Send a test notification:**
 ```bash
 curl -X POST https://tomos-task-api.vercel.app/api/send-push \
+  -H "Authorization: Bearer $CRON_SECRET" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Test Notification",
@@ -130,7 +131,8 @@ curl -X POST https://tomos-task-api.vercel.app/api/send-push \
 **Check endpoint status:**
 ```bash
 curl https://tomos-task-api.vercel.app/api/register-device
-curl https://tomos-task-api.vercel.app/api/send-push
+curl https://tomos-task-api.vercel.app/api/send-push \
+  -H "Authorization: Bearer $CRON_SECRET"
 ```
 
 ### Local Testing
