@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireTrainingReadAccess } from '../../../../lib/server-auth'
 import { getSessionSuggestion } from '@/lib/fitness/suggestions'
 import { getRunningLoadContext } from '@/lib/fitness/running-load'
 import type { WeekType } from '@/types/fitness'
@@ -10,6 +11,9 @@ import type { WeekType } from '@/types/fitness'
  * Combines session suggestion + recovery + running load + nutrition nudge.
  */
 export async function GET(request: NextRequest) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const searchParams = request.nextUrl.searchParams
     const weekType = (searchParams.get('weekType') as WeekType) || undefined

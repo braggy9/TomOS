@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireTrainingReadAccess } from '../../../../../lib/server-auth'
 import { getRunningLoadContext } from '@/lib/fitness/running-load'
 
 /**
@@ -7,6 +8,9 @@ import { getRunningLoadContext } from '@/lib/fitness/running-load'
  * Weekly overview for the running coach — aggregated training, recovery, and load data.
  */
 export async function GET(request: NextRequest) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const days = parseInt(request.nextUrl.searchParams.get('days') || '7')
     const since = new Date()

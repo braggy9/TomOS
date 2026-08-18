@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { requireTrainingReadAccess } from '../../../../../lib/server-auth'
 import { getACWR } from '@/lib/fitness/running-load'
 import { getSydneyToday } from '@/lib/sydney-time'
 
@@ -9,7 +10,10 @@ export const dynamic = 'force-dynamic'
  * GET /api/gym/dashboard/weekly
  * Aggregated weekly data for the dashboard
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const { startOfDay, sydneyDate } = getSydneyToday()
 

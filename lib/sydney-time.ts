@@ -103,16 +103,16 @@ export function getSydneyToday(): SydneyDayBounds {
  * Useful for prescriptions targeting a future date.
  */
 export function getSydneyDayBounds(date: Date): { startOfDay: Date; endOfDay: Date } {
-  const offsetMs = getSydneyOffsetMs()
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const value = (type: 'year' | 'month' | 'day') => parts.find(part => part.type === type)?.value
+  const dateStr = `${value('year')}-${value('month')}-${value('day')}`
 
-  const midnightUTC = new Date(Date.UTC(
-    date.getFullYear(), date.getMonth(), date.getDate(),
-    0, 0, 0, 0
-  ))
-  const startOfDay = new Date(midnightUTC.getTime() - offsetMs)
-  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1)
-
-  return { startOfDay, endOfDay }
+  return getSydneyDayBoundsForDate(dateStr)
 }
 
 /**
