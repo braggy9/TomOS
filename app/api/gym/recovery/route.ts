@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getRecoveryHistoryStart, parseRecoveryHistoryOptions } from '../../../../lib/fitness/recovery-request'
+import { getSydneyToday } from '../../../../lib/sydney-time'
 
 // Map string values from frontend to numeric 1-5 scale
 const SLEEP_MAP: Record<string, number> = { bad: 1, ok: 3, great: 5 }
@@ -17,10 +19,12 @@ function toNumeric(value: string | number, map: Record<string, number>): number 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const days = parseInt(searchParams.get('days') || '30')
-    const limit = parseInt(searchParams.get('limit') || '30')
+    const { days, limit } = parseRecoveryHistoryOptions(searchParams)
+    const { dateStr, endOfDay } = getSydneyToday()
+    const historyStart = getRecoveryHistoryStart(dateStr, days)
 
     const checkins = await prisma.recoveryCheckIn.findMany({
+      where: { date: { gte: historyStart, lte: endOfDay } },
       orderBy: { date: 'desc' },
       take: limit,
     })
@@ -64,10 +68,8 @@ export async function POST(request: NextRequest) {
 
     const readinessScore = (sleepNum + sorenessNum + energyNum + motivationNum) / 4
 
-    // Upsert by today's date (Sydney timezone) to allow updates
-    const sydneyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
-    const startOfDay = new Date(`${sydneyDate}T00:00:00+11:00`)
-    const endOfDay = new Date(`${sydneyDate}T23:59:59+11:00`)
+    // Upsert by today's Sydney calendar date to allow updates.
+    const { startOfDay, endOfDay } = getSydneyToday()
 
     const existing = await prisma.recoveryCheckIn.findFirst({
       where: {
