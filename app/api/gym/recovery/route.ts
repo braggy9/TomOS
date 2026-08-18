@@ -1,12 +1,29 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getRecoveryHistoryStart, parseRecoveryHistoryOptions } from '../../../../lib/fitness/recovery-request'
+import { requireTrainingReadAccess } from '../../../../lib/server-auth'
 import { getSydneyToday } from '../../../../lib/sydney-time'
 
 // Map string values from frontend to numeric 1-5 scale
 const SLEEP_MAP: Record<string, number> = { bad: 1, ok: 3, great: 5 }
 const ENERGY_MAP: Record<string, number> = { low: 1, medium: 3, high: 5 }
 const SORENESS_MAP: Record<string, number> = { sore: 1, mild: 3, none: 5 }
+
+const numericScore = z.number().int().min(1).max(5)
+const recoveryInput = z.object({
+  sleepQuality: z.union([numericScore, z.enum(['bad', 'ok', 'great'])]),
+  soreness: z.union([numericScore, z.enum(['sore', 'mild', 'none'])]),
+  energy: z.union([numericScore, z.enum(['low', 'medium', 'high'])]),
+  motivation: z.union([numericScore, z.enum(['low', 'medium', 'high'])]).optional().default(3),
+  hoursSlept: z.number().min(0).max(24).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+}).strict()
+
+const privateHeaders = {
+  'Cache-Control': 'no-store',
+  'X-Robots-Tag': 'noindex',
+}
 
 function toNumeric(value: string | number, map: Record<string, number>): number | null {
   if (typeof value === 'number') return value
@@ -17,6 +34,9 @@ function toNumeric(value: string | number, map: Record<string, number>): number 
  * GET /api/gym/recovery — List recovery check-ins
  */
 export async function GET(request: NextRequest) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const searchParams = request.nextUrl.searchParams
     const { days, limit } = parseRecoveryHistoryOptions(searchParams)
@@ -37,10 +57,13 @@ export async function GET(request: NextRequest) {
       soreness: c.soreness >= 4 ? 'none' : c.soreness >= 2 ? 'mild' : 'sore',
     }))
 
-    return NextResponse.json({ success: true, data: mapped })
+    return NextResponse.json({ success: true, data: mapped }, { headers: privateHeaders })
   } catch (error) {
     console.error('Error fetching recovery check-ins:', error)
-    return NextResponse.json({ success: false, error: 'Failed to fetch check-ins' }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch check-ins' },
+      { status: 500, headers: privateHeaders }
+    )
   }
 }
 
@@ -49,9 +72,30 @@ export async function GET(request: NextRequest) {
  * Accepts both string values ("bad"/"ok"/"great") and numeric (1-5)
  */
 export async function POST(request: NextRequest) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
+  let body: unknown
   try {
-    const body = await request.json()
-    const { sleepQuality, soreness, energy, motivation, hoursSlept, notes } = body
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { success: false, error: 'Invalid JSON' },
+      { status: 400, headers: privateHeaders }
+    )
+  }
+
+  try {
+    const parsed = recoveryInput.safeParse(body)
+    if (!parsed.success) {
+      const field = parsed.error.issues[0]?.path.join('.') || 'body'
+      return NextResponse.json(
+        { success: false, error: 'Invalid recovery check-in', field },
+        { status: 400, headers: privateHeaders }
+      )
+    }
+
+    const { sleepQuality, soreness, energy, motivation, hoursSlept, notes } = parsed.data
 
     const sleepNum = toNumeric(sleepQuality, SLEEP_MAP)
     const energyNum = toNumeric(energy, ENERGY_MAP)
@@ -113,9 +157,15 @@ export async function POST(request: NextRequest) {
       soreness: checkin.soreness >= 4 ? 'none' : checkin.soreness >= 2 ? 'mild' : 'sore',
     }
 
-    return NextResponse.json({ success: true, data: mapped }, { status: existing ? 200 : 201 })
+    return NextResponse.json(
+      { success: true, data: mapped },
+      { status: existing ? 200 : 201, headers: privateHeaders }
+    )
   } catch (error) {
     console.error('Error creating recovery check-in:', error)
-    return NextResponse.json({ success: false, error: 'Failed to create check-in' }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: 'Failed to create check-in' },
+      { status: 500, headers: privateHeaders }
+    )
   }
 }

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { requireTrainingReadAccess } from '../../../../../lib/server-auth'
 import { getSydneyToday } from '@/lib/sydney-time'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +10,10 @@ export const dynamic = 'force-dynamic'
  * Today's snapshot — run, recovery, and coach prescription.
  * Coach prescriptions are the sole source of daily session guidance.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = requireTrainingReadAccess(request)
+  if (authError) return authError
+
   try {
     const { startOfDay, endOfDay, dateStr } = getSydneyToday()
 
