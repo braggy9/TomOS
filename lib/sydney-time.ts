@@ -19,30 +19,55 @@
  * Get the current UTC offset for Australia/Sydney in milliseconds.
  * Handles AEDT (UTC+11) and AEST (UTC+10) automatically.
  */
-function getSydneyOffsetMs(): number {
-  const now = new Date()
-  // Format the current time as if in UTC and as if in Sydney,
-  // then compare the two to find the offset.
-  const utcParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false,
-  }).formatToParts(now)
-
-  const sydneyParts = new Intl.DateTimeFormat('en-US', {
+function getSydneyOffsetMs(now = new Date()): number {
+  const offsetName = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Australia/Sydney',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false,
-  }).formatToParts(now)
+    timeZoneName: 'longOffset',
+  }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value
 
-  const extract = (parts: Intl.DateTimeFormatPart[]) => {
-    const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0')
-    return new Date(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'))
+  const match = /^GMT([+-])(\d{2}):(\d{2})$/.exec(offsetName || '')
+  if (!match) throw new Error(`Unable to resolve Australia/Sydney offset: ${offsetName || 'missing'}`)
+
+  const direction = match[1] === '+' ? 1 : -1
+  const hours = Number(match[2])
+  const minutes = Number(match[3])
+
+  return direction * (hours * 60 + minutes) * 60 * 1000
+}
+
+function parseDateString(dateStr: string): { year: number; month: number; day: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+  if (!match) throw new Error(`Invalid Sydney date: ${dateStr}`)
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const normalised = new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10)
+
+  if (normalised !== dateStr) throw new Error(`Invalid Sydney date: ${dateStr}`)
+
+  return { year, month, day }
+}
+
+function sydneyMidnightUtc(dateStr: string): Date {
+  const { year, month, day } = parseDateString(dateStr)
+  const wallClockMidnight = Date.UTC(year, month - 1, day)
+  let instant = new Date(wallClockMidnight)
+
+  // The first offset guess can land across a DST boundary. Re-evaluate at the
+  // candidate instant until the UTC representation of Sydney midnight settles.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const candidate = new Date(wallClockMidnight - getSydneyOffsetMs(instant))
+    if (candidate.getTime() === instant.getTime()) return candidate
+    instant = candidate
   }
 
-  return extract(sydneyParts).getTime() - extract(utcParts).getTime()
+  return instant
+}
+
+function addCalendarDays(dateStr: string, days: number): string {
+  const { year, month, day } = parseDateString(dateStr)
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
 }
 
 export interface SydneyDayBounds {
@@ -67,19 +92,8 @@ export function getSydneyToday(): SydneyDayBounds {
 
   // Sydney wall-clock as a Date (for extracting day-of-week, formatting, etc.)
   const sydneyDate = new Date(now.getTime() + offsetMs)
-
-  // Midnight Sydney = take the Sydney date at 00:00:00, convert back to UTC
-  const midnightSydney = new Date(Date.UTC(
-    sydneyDate.getUTCFullYear(),
-    sydneyDate.getUTCMonth(),
-    sydneyDate.getUTCDate(),
-    0, 0, 0, 0
-  ))
-  // Convert from "Sydney midnight" to actual UTC
-  const startOfDay = new Date(midnightSydney.getTime() - offsetMs)
-  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1)
-
   const dateStr = `${sydneyDate.getUTCFullYear()}-${String(sydneyDate.getUTCMonth() + 1).padStart(2, '0')}-${String(sydneyDate.getUTCDate()).padStart(2, '0')}`
+  const { startOfDay, endOfDay } = getSydneyDayBoundsForDate(dateStr)
 
   return { startOfDay, endOfDay, dateStr, sydneyDate }
 }
@@ -99,4 +113,21 @@ export function getSydneyDayBounds(date: Date): { startOfDay: Date; endOfDay: Da
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1)
 
   return { startOfDay, endOfDay }
+}
+
+/**
+ * Get exact UTC bounds for a Sydney calendar date.
+ *
+ * Unlike getSydneyDayBounds(Date), this version resolves the offset on the
+ * requested date and calculates the next local midnight independently. That
+ * keeps history windows correct across daylight-saving transitions.
+ */
+export function getSydneyDayBoundsForDate(dateStr: string): { startOfDay: Date; endOfDay: Date } {
+  const startOfDay = sydneyMidnightUtc(dateStr)
+  const nextStartOfDay = sydneyMidnightUtc(addCalendarDays(dateStr, 1))
+
+  return {
+    startOfDay,
+    endOfDay: new Date(nextStartOfDay.getTime() - 1),
+  }
 }
